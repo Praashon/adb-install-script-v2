@@ -52,6 +52,15 @@
     user-select: none;
     -webkit-app-region: no-drag;
   }
+
+  /* Text the user may legitimately want to copy - URLs, package names, logs. */
+  input,
+  textarea,
+  code,
+  pre {
+    user-select: text;
+    -webkit-user-select: text;
+  }
 }
 
 @layer components {
@@ -201,6 +210,21 @@
     @apply border-t border-white/[0.06] my-4;
   }
 
+  .input-sm {
+    @apply w-full bg-surface-400/80 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-slate-100;
+    @apply placeholder:text-slate-500 font-mono;
+    @apply focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30;
+    @apply transition-all duration-150;
+  }
+
+  .stat-tile {
+    @apply bg-surface-400/50 border border-white/[0.06] rounded-xl p-4;
+  }
+
+  .log-line {
+    @apply font-mono text-xs leading-relaxed px-3 py-1.5 rounded border-l-2 selectable;
+  }
+
   .tooltip {
     @apply absolute z-50 px-2.5 py-1.5 text-xs font-medium text-slate-200 bg-surface-300 border border-white/[0.1] rounded-lg shadow-lg;
     @apply pointer-events-none opacity-0 transition-opacity duration-150;
@@ -224,5 +248,10 @@
 
   .no-drag {
     -webkit-app-region: no-drag;
+  }
+
+  .selectable {
+    user-select: text;
+    -webkit-user-select: text;
   }
 }

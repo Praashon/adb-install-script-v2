@@ -67,18 +67,39 @@ export class DownloadRepository {
       mimeType?: string
       packageName?: string
       versionName?: string
+      packageType?: 'apk' | 'xapk' | 'apks' | 'split_bundle'
     }
   ): void {
+    const existing = this.findById(id)
+
     this.db
       .update(schema.downloads)
       .set({
         filePath: data.filePath,
         fileSize: data.fileSize,
-        sha256: data.sha256 ?? null,
-        mimeType: data.mimeType ?? null,
-        packageName: data.packageName ?? null,
-        versionName: data.versionName ?? null,
+        sha256: data.sha256 ?? existing?.sha256 ?? null,
+        mimeType: data.mimeType ?? existing?.mimeType ?? null,
+        packageName: data.packageName ?? existing?.packageName ?? null,
+        versionName: data.versionName ?? existing?.versionName ?? null,
+        packageType: data.packageType ?? existing?.packageType ?? null,
         status: 'completed'
+      })
+      .where(eq(schema.downloads.id, id))
+      .run()
+  }
+
+  updateMetadata(
+    id: string,
+    data: { packageName?: string; versionName?: string }
+  ): void {
+    const existing = this.findById(id)
+    if (!existing) return
+
+    this.db
+      .update(schema.downloads)
+      .set({
+        packageName: data.packageName ?? existing.packageName,
+        versionName: data.versionName ?? existing.versionName
       })
       .where(eq(schema.downloads.id, id))
       .run()
@@ -88,6 +109,14 @@ export class DownloadRepository {
     this.db
       .update(schema.downloads)
       .set({ status: 'failed' })
+      .where(eq(schema.downloads.id, id))
+      .run()
+  }
+
+  markDeleted(id: string): void {
+    this.db
+      .update(schema.downloads)
+      .set({ status: 'deleted', filePath: null })
       .where(eq(schema.downloads.id, id))
       .run()
   }

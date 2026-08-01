@@ -5,6 +5,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    build: {
+      lib: {
+        entry: resolve('electron/main.ts')
+      }
+    },
     resolve: {
       alias: {
         '@core': resolve('core'),
@@ -19,9 +24,20 @@ export default defineConfig({
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      lib: {
+        entry: resolve('electron/preload.ts')
+      }
+    }
   },
   renderer: {
+    root: resolve('src'),
+    build: {
+      rollupOptions: {
+        input: resolve('src/index.html')
+      }
+    },
     resolve: {
       alias: {
         '@': resolve('src')

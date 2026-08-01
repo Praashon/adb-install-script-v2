@@ -1,4 +1,4 @@
-import { eq, desc, and, or } from 'drizzle-orm'
+import { eq, desc, or } from 'drizzle-orm'
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { v4 as uuid } from 'uuid'
 import * as schema from '../schema'
@@ -119,6 +119,40 @@ export class JobRepository {
         status: 'failed',
         updatedAt: new Date()
       })
+      .where(eq(schema.jobs.id, id))
+      .run()
+  }
+
+  clearError(id: string): void {
+    this.db
+      .update(schema.jobs)
+      .set({ error: null, result: null, progress: 0, updatedAt: new Date() })
+      .where(eq(schema.jobs.id, id))
+      .run()
+  }
+
+  saveContext(id: string, context: Record<string, unknown>): void {
+    this.db
+      .update(schema.jobs)
+      .set({ context: JSON.stringify(context), updatedAt: new Date() })
+      .where(eq(schema.jobs.id, id))
+      .run()
+  }
+
+  readContext(id: string): Record<string, unknown> | undefined {
+    const job = this.findById(id)
+    if (!job?.context) return undefined
+    try {
+      return JSON.parse(job.context) as Record<string, unknown>
+    } catch {
+      return undefined
+    }
+  }
+
+  setDeviceId(id: string, deviceId: string | null): void {
+    this.db
+      .update(schema.jobs)
+      .set({ deviceId, updatedAt: new Date() })
       .where(eq(schema.jobs.id, id))
       .run()
   }

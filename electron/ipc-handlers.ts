@@ -1,204 +1,714 @@
-import { ipcMain, BrowserWindow, shell } from 'electron'
-import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import { EventBus } from '@core/event-bus/eventBus'
-import { JobRunner } from '@core/job-manager/jobRunner'
-import { JobQueue } from '@core/job-manager/jobQueue'
-import { SourceRepository } from '@core/database/repositories/sourceRepository'
-import { AdapterRepository } from '@core/database/repositories/adapterRepository'
-import { JobRepository } from '@core/database/repositories/jobRepository'
-import { DownloadRepository } from '@core/database/repositories/downloadRepository'
-import { DeviceRepository } from '@core/database/repositories/deviceRepository'
-import { SettingsRepository } from '@core/database/repositories/settingsRepository'
-import * as schema from '@core/database/schema'
+import { ipcMain, BrowserWindow, shell, dialog, app } from 'electron'
+import { readFileSync } from 'fs'
+import { unlink } from 'fs/promises'
+import { basename } from 'path'
+import { AppContext } from './appContext'
+import { AdapterRules } from '@security-engine/adapterValidator'
+import { SourceDetector } from '@source-engine/sourceDetector'
+import { Parser } from '@source-engine/parser'
 
-export function registerIpcHandlers(
-  db: BetterSQLite3Database<typeof schema>,
-  eventBus: EventBus,
-  jobRunner: JobRunner
-): void {
-  const sourceRepo = new SourceRepository(db)
-  const adapterRepo = new AdapterRepository(db)
-  const jobRepo = new JobRepository(db)
-  const downloadRepo = new DownloadRepository(db)
-  const deviceRepo = new DeviceRepository(db)
-  const settingsRepo = new SettingsRepository(db)
-  const jobQueue = new JobQueue(db, eventBus)
-
+export function registerIpcHandlers(ctx: AppContext): void {
   registerWindowHandlers()
-  registerJobHandlers(jobQueue, jobRepo, jobRunner)
-  registerSourceHandlers(sourceRepo, adapterRepo)
-  registerDeviceHandlers(deviceRepo)
-  registerDownloadHandlers(downloadRepo)
-  registerSettingsHandlers(settingsRepo)
+  registerJobHandlers(ctx)
+  registerSourceHandlers(ctx)
+  registerDeviceHandlers(ctx)
+  registerDownloadHandlers(ctx)
+  registerSettingsHandlers(ctx)
+  registerAppHandlers(ctx)
 }
 
+/** Wraps a handler so renderer-side errors carry a clean, human message. */
+function handle<T extends unknown[], R>(
+  channel: string,
+  fn: (...args: T) => Promise<R> | R
+): void {
+  ipcMain.removeHandler(channel)
+  ipcMain.handle(channel, async (_event, ...args) => {
+    try {
+      return await fn(...(args as T))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(message)
+    }
+  })
+}
+
+function focusedWindow(): BrowserWindow | null {
+  return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null
+}
+
+/** Dialogs are modal to the app window when there is one. */
+function openDialog(options: Electron.OpenDialogOptions): Promise<Electron.OpenDialogReturnValue> {
+  const window = focusedWindow()
+  return window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options)
+}
+
+function saveDialog(options: Electron.SaveDialogOptions): Promise<Electron.SaveDialogReturnValue> {
+  const window = focusedWindow()
+  return window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options)
+}
+
+/* ------------------------------------------------------------------ */
+
 function registerWindowHandlers(): void {
+  ipcMain.removeAllListeners('window:minimize')
+  ipcMain.removeAllListeners('window:maximize')
+  ipcMain.removeAllListeners('window:close')
+
   ipcMain.on('window:minimize', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize()
   })
 
   ipcMain.on('window:maximize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    if (win?.isMaximized()) {
-      win.unmaximize()
-    } else {
-      win?.maximize()
-    }
+    if (!win) return
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
   })
 
   ipcMain.on('window:close', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.close()
   })
+
+  handle('window:isMaximized', () => focusedWindow()?.isMaximized() ?? false)
 }
 
-function registerJobHandlers(
-  jobQueue: JobQueue,
-  jobRepo: JobRepository,
-  jobRunner: JobRunner
-): void {
-  ipcMain.handle('job:create', async (_event, url: string, deviceId?: string) => {
-    const jobId = await jobQueue.enqueue(url, deviceId)
-    jobRunner.processNext()
+/* ------------------------------------------------------------------ */
+
+function registerJobHandlers(ctx: AppContext): void {
+  handle('job:create', async (url: string, deviceSerial?: string) => {
+    const jobId = await ctx.jobQueue.enqueue(url, deviceSerial)
+    ctx.jobRunner.processNext()
     return jobId
   })
 
-  ipcMain.handle('job:getAll', async () => {
-    return jobRepo.findAll()
+  handle('job:createDownload', async (url: string) => {
+    const jobId = await ctx.jobQueue.enqueueDownload(url)
+    ctx.jobRunner.processNext()
+    return jobId
   })
 
-  ipcMain.handle('job:getById', async (_event, id: string) => {
-    return jobRepo.findById(id)
+  /**
+   * Installs an APK already on disk. Sites behind an anti-bot service can be
+   * downloaded manually in a normal browser, then handed to the app here —
+   * no automated browsing involved.
+   */
+  handle('job:createFromFile', async (deviceSerial?: string) => {
+    const picked = await openDialog({
+      title: 'Select an APK to install',
+      filters: [
+        { name: 'Android packages', extensions: ['apk', 'xapk', 'apks', 'apkm', 'zip'] },
+        { name: 'All files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    })
+
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return { cancelled: true }
+    }
+
+    const filePath = picked.filePaths[0]
+    const { statSync } = await import('fs')
+    const stats = statSync(filePath)
+    const filename = basename(filePath)
+
+    const device = deviceSerial
+      ? ctx.deviceRepo.findBySerial(deviceSerial)
+      : ctx.deviceRepo.findPreferred()
+
+    const jobId = ctx.jobRepo.create({
+      url: `file:///${filePath.replace(/\\/g, '/')}`,
+      type: 'install',
+      deviceId: device?.id
+    })
+
+    const downloadId = ctx.downloadRepo.create({
+      jobId,
+      url: `file:///${filePath.replace(/\\/g, '/')}`,
+      filename,
+      filePath,
+      fileSize: stats.size
+    })
+
+    // The file is already here, so skip detect/resolve/download entirely.
+    ctx.jobRepo.saveContext(jobId, {
+      jobId,
+      url: `file:///${filePath.replace(/\\/g, '/')}`,
+      deviceId: device?.id,
+      deviceSerial: device?.serial,
+      downloadId,
+      downloadPath: filePath,
+      filename,
+      fileSize: stats.size
+    })
+    ctx.jobRepo.updateProgress(jobId, 0, 'validate_package')
+
+    ctx.eventBus.job(jobId, 'info', `Installing ${filename} from disk`)
+    ctx.jobRunner.processNext()
+
+    return { cancelled: false, jobId, filename }
   })
 
-  ipcMain.handle('job:cancel', async (_event, id: string) => {
-    await jobRunner.cancelJob(id)
+  handle('job:getAll', () => ctx.jobRepo.findAll())
+
+  handle('job:getById', (id: string) => ctx.jobRepo.findById(id))
+
+  handle('job:cancel', (id: string) => ctx.jobRunner.cancelJob(id))
+
+  handle('job:retry', async (id: string) => {
+    await ctx.jobQueue.requeueFailed(id)
+    ctx.jobRunner.processNext()
   })
 
-  ipcMain.handle('job:retry', async (_event, id: string) => {
-    await jobQueue.requeueFailed(id)
-    jobRunner.processNext()
+  handle('job:pause', (id: string) => ctx.jobRunner.pauseJob(id))
+
+  handle('job:resume', (id: string) => ctx.jobRunner.resumeJob(id))
+
+  handle('job:remove', async (id: string) => {
+    await ctx.jobRunner.cancelJob(id)
+    ctx.jobRepo.remove(id)
   })
 
-  ipcMain.handle('job:pause', async (_event, id: string) => {
-    await jobRunner.pauseJob(id)
-  })
+  handle('job:getLogs', (id: string) => ctx.logRepo.findByJobId(id))
 
-  ipcMain.handle('job:resume', async (_event, id: string) => {
-    await jobRunner.resumeJob(id)
+  handle('job:clearFinished', () => {
+    const removable = ctx.jobRepo
+      .findAll()
+      .filter((job) => ['completed', 'failed', 'cancelled'].includes(job.status))
+
+    for (const job of removable) ctx.jobRepo.remove(job.id)
+    return removable.length
   })
 }
 
-function registerSourceHandlers(
-  sourceRepo: SourceRepository,
-  _adapterRepo: AdapterRepository
-): void {
-  ipcMain.handle('source:detect', async (_event, url: string) => {
-    const { SourceDetector } = await import('@source-engine/sourceDetector')
-    const detector = new SourceDetector(sourceRepo)
+/* ------------------------------------------------------------------ */
+
+function registerSourceHandlers(ctx: AppContext): void {
+  handle('source:detect', (url: string) => {
+    const detector = new SourceDetector(ctx.sourceRepo, ctx.adapterRepo)
     return detector.detect(url)
   })
 
-  ipcMain.handle('source:getAll', async () => {
-    return sourceRepo.findAll()
+  handle('source:getAll', () => {
+    // Join each source with its live health numbers so the UI can show real
+    // success rates instead of a hard-coded 100%.
+    const health = new Map(ctx.healthChecker.getHealthStatus().map((h) => [h.sourceId, h]))
+
+    return ctx.sourceRepo.findAll().map((source) => {
+      const stats = health.get(source.id)
+      const adapter = ctx.adapterManager.getAdapterBySourceId(source.id)
+
+      return {
+        ...source,
+        successRate: stats?.successRate ?? 100,
+        totalAttempts: stats?.totalAttempts ?? 0,
+        failureCount: stats?.failureCount ?? 0,
+        lastTested: stats?.lastTested ?? null,
+        activeAdapterVersion: stats?.activeAdapterVersion ?? 1,
+        hasAdapter: Boolean(adapter),
+        supportedFormats: adapter?.manifest.supportedFormats ?? []
+      }
+    })
   })
 
-  ipcMain.handle('source:getById', async (_event, id: string) => {
-    return sourceRepo.findById(id)
+  handle('source:getById', (id: string) => {
+    const source = ctx.sourceRepo.findById(id)
+    if (!source) throw new Error('Source not found')
+
+    const adapter = ctx.adapterManager.getAdapterBySourceId(id)
+    const version = ctx.adapterRepo.findActiveBySourceId(id)
+
+    return {
+      ...source,
+      rules: adapter?.rules ?? null,
+      manifest: adapter?.manifest ?? null,
+      versions: ctx.adapterRepo.findBySourceId(id),
+      activeVersion: version?.version ?? null
+    }
   })
 
-  ipcMain.handle('source:create', async (_event, data: unknown) => {
-    return sourceRepo.create(data as Parameters<SourceRepository['create']>[0])
+  handle('source:create', async (data: { name: string; domain: string; rules: AdapterRules }) => {
+    if (!data?.name?.trim()) throw new Error('Adapter name is required')
+    if (!data?.domain?.trim()) throw new Error('Domain is required')
+
+    return ctx.adapterManager.saveCustomAdapter(data.name.trim(), data.domain.trim(), data.rules)
   })
 
-  ipcMain.handle('source:update', async (_event, id: string, data: unknown) => {
-    return sourceRepo.update(id, data as Parameters<SourceRepository['update']>[1])
+  handle('source:update', async (id: string, data: { name?: string; rules?: AdapterRules; status?: string }) => {
+    if (data.rules) {
+      await ctx.adapterManager.updateAdapter(id, data.rules, data.name)
+      return
+    }
+
+    ctx.sourceRepo.update(id, {
+      ...(data.name ? { name: data.name } : {}),
+      ...(data.status ? { status: data.status as 'healthy' | 'degraded' | 'broken' | 'disabled' } : {})
+    })
   })
 
-  ipcMain.handle('source:remove', async (_event, id: string) => {
-    return sourceRepo.remove(id)
+  handle('source:remove', (id: string) => ctx.adapterManager.removeSource(id))
+
+  handle('source:setEnabled', (id: string, enabled: boolean) => {
+    ctx.sourceRepo.updateStatus(id, enabled ? 'healthy' : 'disabled')
   })
 
-  ipcMain.handle('source:test', async (_event, _id: string) => {
-    return { success: true, message: 'Adapter test not yet implemented' }
+  /** Live-tests an adapter: reachability plus whether its selectors still match. */
+  handle('source:test', async (id: string, testUrl?: string) => {
+    const source = ctx.sourceRepo.findById(id)
+    if (!source) throw new Error('Source not found')
+
+    const started = Date.now()
+    const health = await ctx.healthChecker.checkSource(id)
+
+    if (health?.status === 'broken') {
+      return {
+        success: false,
+        reachable: false,
+        message: `${source.domain} is unreachable`,
+        durationMs: Date.now() - started
+      }
+    }
+
+    const adapter = ctx.adapterManager.getAdapterBySourceId(id)
+    const url = testUrl?.trim() || source.url
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          ...(adapter?.sandboxed.getAllHeaders() ?? {})
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(20000)
+      })
+
+      if (!response.ok) {
+        return {
+          success: false,
+          reachable: true,
+          message: `${url} returned HTTP ${response.status}`,
+          durationMs: Date.now() - started
+        }
+      }
+
+      const html = await response.text()
+      const parser = new Parser()
+      const parsed = await parser.parseDownloadPage(
+        html,
+        url,
+        adapter?.sandboxed ?? ctx.adapterManager.getFallbackAdapter()
+      )
+
+      const durationMs = Date.now() - started
+
+      if (!parsed) {
+        return {
+          success: false,
+          reachable: true,
+          message:
+            'The site responded, but no download link matched the adapter selectors. Try testing against a specific app page URL.',
+          durationMs
+        }
+      }
+
+      return {
+        success: true,
+        reachable: true,
+        message: `Matched a ${parsed.fileType.toUpperCase()} link: ${parsed.filename}`,
+        downloadUrl: parsed.downloadUrl,
+        durationMs
+      }
+    } catch (error) {
+      return {
+        success: false,
+        reachable: true,
+        message: error instanceof Error ? error.message : 'Test failed',
+        durationMs: Date.now() - started
+      }
+    }
   })
 
-  ipcMain.handle('source:analyze', async (_event, url: string) => {
+  handle('source:analyze', async (url: string) => {
+    if (!/^https?:\/\//i.test(url?.trim() ?? '')) {
+      throw new Error('Enter a full URL starting with http:// or https://')
+    }
+
     const { WebsiteAnalyzer } = await import('@source-engine/websiteAnalyzer')
     const analyzer = new WebsiteAnalyzer()
-    return analyzer.analyze(url)
+    const result = await analyzer.analyze(url.trim())
+
+    if (result.confidence === 0) {
+      throw new Error(
+        'No download links were found on that page. Try a page that has a visible download button.'
+      )
+    }
+
+    return result
   })
 
-  ipcMain.handle('source:import', async (_event, _filePath: string) => {
-    return { success: true }
+  handle('source:import', async () => {
+    const result = await openDialog({
+      title: 'Import source plugin',
+      filters: [{ name: 'Adapter plugin', extensions: ['json'] }],
+      properties: ['openFile']
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { cancelled: true }
+    }
+
+    const raw = JSON.parse(readFileSync(result.filePaths[0], 'utf-8'))
+    const sourceId = await ctx.adapterManager.importBundle(raw)
+
+    ctx.eventBus.source('info', `Imported plugin from ${basename(result.filePaths[0])}`)
+    return { cancelled: false, sourceId }
   })
 
-  ipcMain.handle('source:export', async (_event, _id: string, _targetPath: string) => {
-    return { success: true }
+  handle('source:export', async (id: string) => {
+    const source = ctx.sourceRepo.findById(id)
+    if (!source) throw new Error('Source not found')
+
+    const bundle = ctx.adapterManager.exportBundle(id)
+
+    const result = await saveDialog({
+      title: 'Export source plugin',
+      defaultPath: `${source.domain.replace(/[^a-z0-9]+/gi, '-')}-adapter.json`,
+      filters: [{ name: 'Adapter plugin', extensions: ['json'] }]
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { cancelled: true }
+    }
+
+    const { writeFileSync } = await import('fs')
+    writeFileSync(result.filePath, JSON.stringify(bundle, null, 2), 'utf-8')
+
+    ctx.eventBus.source('info', `Exported ${source.name} adapter`)
+    return { cancelled: false, filePath: result.filePath }
+  })
+
+  handle('source:reload', async () => {
+    const { loaded, failed } = await ctx.adapterManager.loadAll()
+    ctx.eventBus.source('info', `Reloaded ${loaded} adapter(s)`)
+    return { loaded, failed }
   })
 }
 
-function registerDeviceHandlers(deviceRepo: DeviceRepository): void {
-  ipcMain.handle('device:list', async () => {
-    const { AdbManager } = await import('@adb-engine/adbManager')
-    const adb = new AdbManager()
-    const devices = await adb.listDevices()
+/* ------------------------------------------------------------------ */
 
-    for (const device of devices) {
-      await deviceRepo.upsert({
-        serial: device.serial,
-        model: device.model,
-        manufacturer: device.manufacturer,
-        androidVersion: device.androidVersion,
-        architecture: device.architecture,
-        status: device.status
-      })
-    }
+function registerDeviceHandlers(ctx: AppContext): void {
+  handle('device:list', () => ctx.deviceMonitor.getLastDevices())
 
-    return devices
-  })
+  handle('device:refresh', () => ctx.deviceMonitor.refresh())
 
-  ipcMain.handle('device:getInfo', async (_event, serial: string) => {
-    const { AdbManager } = await import('@adb-engine/adbManager')
-    const adb = new AdbManager()
+  handle('device:getInfo', async (serial: string) => {
+    const adb = ctx.createAdbManager()
     return adb.getDeviceInfo(serial)
   })
 
-  ipcMain.handle('device:setPreferred', async (_event, serial: string) => {
-    await deviceRepo.setPreferred(serial)
-  })
-}
-
-function registerDownloadHandlers(downloadRepo: DownloadRepository): void {
-  ipcMain.handle('download:getAll', async () => {
-    return downloadRepo.findAll()
+  handle('device:setPreferred', (serial: string) => {
+    ctx.deviceRepo.setPreferred(serial)
+    ctx.eventBus.adb('info', `Preferred device set to ${serial}`, { serial })
   })
 
-  ipcMain.handle('download:getById', async (_event, id: string) => {
-    return downloadRepo.findById(id)
+  handle('device:getInstalledApps', async (serial: string, includeSystem?: boolean) => {
+    const adb = ctx.createAdbManager()
+    const packages = await adb.listPackages(serial, includeSystem === true)
+
+    const device = ctx.deviceRepo.findBySerial(serial)
+    const known = device
+      ? new Map(ctx.installedAppRepo.findByDeviceId(device.id).map((a) => [a.packageName, a]))
+      : new Map()
+
+    return packages.map((pkg) => {
+      const record = known.get(pkg.packageName)
+      return {
+        packageName: pkg.packageName,
+        isSystem: pkg.isSystem,
+        versionName: record?.versionName ?? null,
+        installedByApp: Boolean(record),
+        installedAt: record?.installedAt ?? null
+      }
+    })
   })
 
-  ipcMain.handle('download:remove', async (_event, id: string) => {
-    return downloadRepo.remove(id)
+  handle('device:uninstall', async (serial: string, packageName: string) => {
+    const adb = ctx.createAdbManager()
+
+    const full = await adb.uninstall(packageName, serial)
+    let result = full
+
+    // A plain `adb uninstall` fails for anything shipped with the system image
+    // (DELETE_FAILED_INTERNAL_ERROR) and for vendor-restricted packages
+    // (DELETE_FAILED_USER_RESTRICTED). Removing it for the primary user is the
+    // standard next step and is reversible, so always try it before giving up.
+    if (!full.success) {
+      ctx.eventBus.adb(
+        'info',
+        `Direct uninstall of ${packageName} was refused — removing it for the current user instead`,
+        { serial, reason: full.error }
+      )
+
+      const perUser = await adb.uninstallForUser(packageName, serial)
+
+      if (!perUser.success) {
+        // Nothing more can be removed. Disabling still gets the app out of the
+        // way, but it is a different outcome, so the user decides — we never
+        // silently substitute it for the uninstall they asked for.
+        ctx.eventBus.adb('warn', `Could not uninstall ${packageName}`, {
+          serial,
+          reason: perUser.error
+        })
+
+        return {
+          success: false,
+          canDisable: true,
+          error: perUser.error || full.error || `Failed to uninstall ${packageName}`
+        }
+      }
+
+      result = perUser
+    }
+
+    const device = ctx.deviceRepo.findBySerial(serial)
+    if (device) ctx.installedAppRepo.removeByPackage(packageName, device.id)
+
+    ctx.eventBus.adb('info', `Uninstalled ${packageName}`, { serial, mode: result.mode })
+    return { success: true, mode: result.mode }
   })
 
-  ipcMain.handle('download:openFolder', async (_event, id: string) => {
-    const download = await downloadRepo.findById(id)
-    if (download?.filePath) {
-      shell.showItemInFolder(download.filePath)
+  handle('device:disableApp', async (serial: string, packageName: string) => {
+    const adb = ctx.createAdbManager()
+    const result = await adb.disableForUser(packageName, serial)
+
+    if (!result.success) {
+      throw new Error(result.error || `Could not disable ${packageName}`)
+    }
+
+    const device = ctx.deviceRepo.findBySerial(serial)
+    if (device) ctx.installedAppRepo.removeByPackage(packageName, device.id)
+
+    ctx.eventBus.adb('info', `Disabled ${packageName} for the current user`, { serial })
+    return { success: true }
+  })
+
+  handle('device:connect', async (address: string) => {
+    const adb = ctx.createAdbManager()
+    const result = await adb.connect(address.trim())
+    if (!result.success) throw new Error(result.message || 'Connection failed')
+
+    await ctx.deviceMonitor.refresh()
+    return result
+  })
+
+  handle('device:disconnect', async (address: string) => {
+    const adb = ctx.createAdbManager()
+    await adb.disconnect(address)
+    await ctx.deviceMonitor.refresh()
+  })
+
+  handle('device:adbStatus', async () => {
+    const adb = ctx.createAdbManager()
+    const version = await adb.getVersion()
+    return {
+      available: version !== null,
+      version,
+      path: adb.getAdbPath()
     }
   })
 }
 
-function registerSettingsHandlers(settingsRepo: SettingsRepository): void {
-  ipcMain.handle('settings:get', async (_event, key: string) => {
-    return settingsRepo.get(key)
+/* ------------------------------------------------------------------ */
+
+function registerDownloadHandlers(ctx: AppContext): void {
+  handle('download:getAll', () => ctx.downloadRepo.findAll())
+
+  handle('download:getById', (id: string) => ctx.downloadRepo.findById(id))
+
+  handle('download:remove', async (id: string, deleteFile?: boolean) => {
+    const download = ctx.downloadRepo.findById(id)
+    if (!download) return
+
+    if (deleteFile !== false && download.filePath) {
+      await unlink(download.filePath).catch(() => {
+        // Already gone, or locked by another process — the row still goes.
+      })
+    }
+
+    ctx.downloadRepo.remove(id)
   })
 
-  ipcMain.handle('settings:set', async (_event, key: string, value: unknown) => {
-    return settingsRepo.set(key, JSON.stringify(value))
+  handle('download:openFolder', (id: string) => {
+    const download = ctx.downloadRepo.findById(id)
+    if (!download?.filePath) throw new Error('This download has no file on disk')
+    shell.showItemInFolder(download.filePath)
   })
 
-  ipcMain.handle('settings:getAll', async () => {
-    return settingsRepo.getAll()
+  handle('download:openFile', async (id: string) => {
+    const download = ctx.downloadRepo.findById(id)
+    if (!download?.filePath) throw new Error('This download has no file on disk')
+
+    const error = await shell.openPath(download.filePath)
+    if (error) throw new Error(error)
+  })
+
+  /** Re-installs a file already on disk, skipping fetch/download entirely. */
+  handle('download:install', async (id: string, deviceSerial?: string) => {
+    const download = ctx.downloadRepo.findById(id)
+    if (!download) throw new Error('Download not found')
+    if (!download.filePath) throw new Error('The file for this download is no longer on disk')
+
+    const { existsSync } = await import('fs')
+    if (!existsSync(download.filePath)) {
+      throw new Error('The file for this download is no longer on disk')
+    }
+
+    const jobId = await ctx.jobQueue.enqueue(download.url, deviceSerial)
+
+    // Pre-seed the context so the runner jumps straight to validation.
+    ctx.jobRepo.saveContext(jobId, {
+      jobId,
+      url: download.url,
+      deviceSerial,
+      sourceId: download.sourceId ?? undefined,
+      downloadId: download.id,
+      downloadPath: download.filePath,
+      filename: download.filename,
+      fileSize: download.fileSize ?? undefined
+    })
+    ctx.jobRepo.updateProgress(jobId, 0, 'validate_package')
+
+    ctx.jobRunner.processNext()
+    return jobId
+  })
+
+  handle('download:clearHistory', async (deleteFiles = false) => {
+    const downloads = ctx.downloadRepo.findAll()
+
+    for (const download of downloads) {
+      if (deleteFiles && download.filePath) {
+        await unlink(download.filePath).catch(() => {})
+      }
+      ctx.downloadRepo.remove(download.id)
+    }
+
+    return downloads.length
+  })
+}
+
+/* ------------------------------------------------------------------ */
+
+function registerSettingsHandlers(ctx: AppContext): void {
+  handle('settings:get', (key: string) => ctx.settingsRepo.get(key))
+
+  handle('settings:set', (key: string, value: unknown) => {
+    // Settings are stored as plain strings; JSON-encoding a string here would
+    // add a layer of quotes on every save.
+    const raw = typeof value === 'string' ? value : JSON.stringify(value)
+    ctx.settingsRepo.set(key, raw)
+    applySettingSideEffects(ctx, key, raw)
+  })
+
+  handle('settings:setMany', (values: Record<string, unknown>) => {
+    for (const [key, value] of Object.entries(values)) {
+      const raw = typeof value === 'string' ? value : JSON.stringify(value)
+      ctx.settingsRepo.set(key, raw)
+      applySettingSideEffects(ctx, key, raw)
+    }
+  })
+
+  handle('settings:getAll', () => ({
+    ...ctx.settingsRepo.getAll(),
+    'download.defaultDirectory': ctx.paths.downloads
+  }))
+
+  handle('settings:pickDirectory', async (current?: string) => {
+    const result = await openDialog({
+      title: 'Choose download folder',
+      defaultPath: current || ctx.paths.downloads,
+      properties: ['openDirectory', 'createDirectory']
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  handle('settings:pickAdbPath', async (current?: string) => {
+    const result = await openDialog({
+      title: 'Locate adb executable',
+      defaultPath: current || undefined,
+      filters:
+        process.platform === 'win32'
+          ? [{ name: 'Executable', extensions: ['exe'] }]
+          : [{ name: 'All files', extensions: ['*'] }],
+      properties: ['openFile']
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+}
+
+function applySettingSideEffects(ctx: AppContext, key: string, value: string): void {
+  if (key === 'download.maxConcurrent') {
+    const parsed = parseInt(value, 10)
+    if (Number.isFinite(parsed)) ctx.jobRunner.setMaxConcurrent(parsed)
+  }
+
+  if (key === 'adb.path') {
+    void ctx.deviceMonitor.refresh()
+  }
+}
+
+/* ------------------------------------------------------------------ */
+
+function registerAppHandlers(ctx: AppContext): void {
+  handle('app:getStats', () => {
+    const jobs = ctx.jobRepo.findAll()
+    const devices = ctx.deviceMonitor.getLastDevices()
+
+    return {
+      activeJobs: jobs.filter((j) => ['queued', 'running', 'paused'].includes(j.status)).length,
+      completedJobs: jobs.filter((j) => j.status === 'completed').length,
+      failedJobs: jobs.filter((j) => j.status === 'failed').length,
+      totalDownloads: ctx.downloadRepo.findAll().length,
+      installedApps: ctx.installedAppRepo.findAll().length,
+      sources: ctx.sourceRepo.findAll().length,
+      devicesOnline: devices.filter((d) => d.status === 'online').length,
+      devicesTotal: devices.length
+    }
+  })
+
+  handle('app:getRecentJobs', (limit?: number) => ctx.jobRepo.findRecent(limit ?? 5))
+
+  handle('app:getLogs', (limit?: number) => ctx.logRepo.findRecent(limit ?? 200))
+
+  handle('app:clearLogs', () => ctx.logRepo.clear())
+
+  handle('app:getInstalledApps', () => ctx.installedAppRepo.findAll())
+
+  handle('app:openExternal', async (url: string) => {
+    if (!/^https?:\/\//i.test(url)) throw new Error('Only http(s) links can be opened')
+    await shell.openExternal(url)
+  })
+
+  handle('app:getInfo', async () => {
+    const adb = ctx.createAdbManager()
+    const [adbVersion, adapters] = await Promise.all([
+      adb.getVersion(),
+      Promise.resolve(ctx.adapterManager.getAllAdapters().length)
+    ])
+
+    return {
+      version: app.getVersion(),
+      electron: process.versions.electron,
+      node: process.versions.node,
+      adbPath: adb.getAdbPath(),
+      adbVersion,
+      adapters,
+      downloadDirectory: ctx.getSettings().downloadDirectory,
+      pluginDirectory: ctx.paths.userPlugins
+    }
   })
 }

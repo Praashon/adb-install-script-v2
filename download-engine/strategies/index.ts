@@ -1,6 +1,6 @@
 import { Parser } from '@source-engine/parser'
 import { SandboxedAdapter } from '@security-engine/sandbox'
-import { ResolvedDownload } from './resolver'
+import { ResolvedDownload } from '../resolver'
 import { EventBus } from '@core/event-bus/eventBus'
 
 export class DirectDownloadStrategy {
@@ -102,29 +102,36 @@ export class RedirectDownloadStrategy {
   }
 }
 
+export interface BrowserStrategyOptions {
+  /** Show the browser window so the user can clear a verification check. */
+  headed?: boolean
+}
+
 export class BrowserDownloadStrategy {
   constructor(private eventBus: EventBus) {}
 
   async resolve(
     url: string,
-    adapter?: SandboxedAdapter
+    adapter?: SandboxedAdapter,
+    options: BrowserStrategyOptions = {}
   ): Promise<ResolvedDownload | null> {
-    try {
-      const { NetworkInterceptor } = await import('@browser-engine/networkInterceptor')
-      const { BrowserManager } = await import('@browser-engine/browserManager')
+    const { NetworkInterceptor } = await import('@browser-engine/networkInterceptor')
+    const { BrowserManager } = await import('@browser-engine/browserManager')
 
-      const browserManager = new BrowserManager()
+    const browserManager = new BrowserManager({ headed: options.headed })
+
+    try {
       const interceptor = new NetworkInterceptor(browserManager)
 
-      const clickSelector = adapter?.getSelector('downloadLinkSelector') ||
-        adapter?.getSelector('downloadPageSelector')
+      const clickSelector =
+        adapter?.getSelector('downloadLinkSelector') || adapter?.getSelector('downloadPageSelector')
 
       const result = await interceptor.captureDownloadUrl(url, {
         clickSelector: clickSelector || undefined,
-        waitTimeout: adapter?.getTimeout() ?? 30000
+        waitTimeout: adapter?.getTimeout() ?? 30000,
+        // In a visible window the user needs real time to click through.
+        challengeTimeout: options.headed ? 120000 : 12000
       })
-
-      await browserManager.close()
 
       if (!result) {
         this.eventBus.download('warn', 'Browser strategy found no download', { url })
@@ -144,7 +151,20 @@ export class BrowserDownloadStrategy {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
       this.eventBus.download('error', `Browser strategy failed: ${message}`)
+
+      // Setup problems and verification prompts are things the user can act on,
+      // so surface them instead of reporting a generic "no link found".
+      if (
+        error instanceof Error &&
+        (error.name === 'HumanVerificationRequiredError' ||
+          /No Chrome, Edge, or Brave|executable doesn't exist|Failed to launch/i.test(message))
+      ) {
+        throw error
+      }
+
       return null
+    } finally {
+      await browserManager.close().catch(() => undefined)
     }
   }
 }

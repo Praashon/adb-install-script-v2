@@ -1,6 +1,6 @@
 import AdmZip from 'adm-zip'
 import { join } from 'path'
-import { mkdirSync, existsSync } from 'fs'
+import { mkdirSync, statSync } from 'fs'
 import { PackageType, ApkPackageInfo } from './types'
 
 export class Extractor {
@@ -20,13 +20,10 @@ export class Extractor {
   }
 
   private handleSingleApk(filePath: string, _outputDir: string): ApkPackageInfo {
-    const { statSync } = require('fs')
-    const stat = statSync(filePath)
-
     return {
       type: 'apk',
       filePath,
-      fileSize: stat.size,
+      fileSize: statSync(filePath).size,
       apkFiles: [filePath],
       obbFiles: []
     }
@@ -51,9 +48,10 @@ export class Extractor {
       }
 
       if (entry.entryName.endsWith('.apk')) {
-        const outPath = join(outputDir, entry.entryName)
+        // Extracted without the entry path, so the file lands flat in outputDir.
+        const flatName = entry.entryName.split('/').pop()!
         zip.extractEntryTo(entry, outputDir, false, true)
-        apkFiles.push(outPath)
+        apkFiles.push(join(outputDir, flatName))
         continue
       }
 
@@ -68,8 +66,6 @@ export class Extractor {
     }
 
     this.sortApkFiles(apkFiles)
-
-    const { statSync } = require('fs')
 
     return {
       type: 'xapk',
@@ -97,8 +93,6 @@ export class Extractor {
     }
 
     this.sortApkFiles(apkFiles)
-
-    const { statSync } = require('fs')
 
     return {
       type: 'apks',

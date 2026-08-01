@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { v4 as uuid } from 'uuid'
 import * as schema from '../schema'

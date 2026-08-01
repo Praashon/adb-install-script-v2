@@ -1,86 +1,130 @@
+import { existsSync } from 'fs'
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import * as schema from '@core/database/schema'
 import { JobRepository } from '@core/database/repositories/jobRepository'
+import { DeviceRepository } from '@core/database/repositories/deviceRepository'
 import { EventBus } from '@core/event-bus/eventBus'
-import { JobContext, createJobSteps } from './jobTypes'
+import { JobContext, JobType, createJobSteps } from './jobTypes'
 
 export class JobQueue {
   private jobRepo: JobRepository
+  private deviceRepo: DeviceRepository
 
   constructor(
-    private db: BetterSQLite3Database<typeof schema>,
+    db: BetterSQLite3Database<typeof schema>,
     private eventBus: EventBus
   ) {
     this.jobRepo = new JobRepository(db)
+    this.deviceRepo = new DeviceRepository(db)
   }
 
-  async enqueue(url: string, deviceId?: string): Promise<string> {
+  async enqueue(url: string, deviceSerial?: string): Promise<string> {
+    return this.createJob(url, 'install', deviceSerial)
+  }
+
+  async enqueueDownload(url: string): Promise<string> {
+    return this.createJob(url, 'download')
+  }
+
+  async enqueueAnalysis(url: string): Promise<string> {
+    return this.createJob(url, 'analyze')
+  }
+
+  private createJob(url: string, type: JobType, deviceSerial?: string): string {
+    const trimmed = url.trim()
+    if (!trimmed) {
+      throw new Error('A URL is required')
+    }
+    if (!/^https?:\/\//i.test(trimmed)) {
+      throw new Error('URL must start with http:// or https://')
+    }
+
+    // `jobs.device_id` is a foreign key onto `devices.id`, so a raw ADB serial
+    // from the UI has to be translated into the device row's id first.
+    const device = deviceSerial ? this.deviceRepo.findBySerial(deviceSerial) : undefined
+    const preferred = device ?? (type === 'install' ? this.deviceRepo.findPreferred() : undefined)
+
     const jobId = this.jobRepo.create({
-      url,
-      type: 'install',
-      deviceId
+      url: trimmed,
+      type,
+      deviceId: preferred?.id
     })
 
-    const steps = createJobSteps('install')
-
+    const steps = createJobSteps(type)
     this.jobRepo.updateProgress(jobId, 0, steps[0].name)
+    this.jobRepo.saveContext(jobId, {
+      jobId,
+      url: trimmed,
+      deviceId: preferred?.id,
+      deviceSerial: preferred?.serial
+    })
 
-    this.eventBus.job(jobId, 'info', 'Job queued', {
-      url,
-      deviceId,
+    this.eventBus.job(jobId, 'info', `${this.labelFor(type)} queued`, {
+      url: trimmed,
+      deviceSerial: preferred?.serial,
       steps: steps.map((s) => s.name)
     })
 
     return jobId
   }
 
-  async enqueueDownload(url: string): Promise<string> {
-    const jobId = this.jobRepo.create({
-      url,
-      type: 'download'
-    })
-
-    const steps = createJobSteps('download')
-    this.jobRepo.updateProgress(jobId, 0, steps[0].name)
-
-    this.eventBus.job(jobId, 'info', 'Download job queued', { url })
-    return jobId
-  }
-
-  async enqueueAnalysis(url: string): Promise<string> {
-    const jobId = this.jobRepo.create({
-      url,
-      type: 'analyze'
-    })
-
-    this.jobRepo.updateProgress(jobId, 0, 'detect_source')
-    this.eventBus.job(jobId, 'info', 'Analysis job queued', { url })
-    return jobId
-  }
-
-  getNext(): { jobId: string; context: JobContext } | null {
+  getNext(excludeIds: Set<string> = new Set()): { jobId: string; context: JobContext } | null {
     const queued = this.jobRepo.findByStatus('queued')
-    if (queued.length === 0) return null
+    const job = queued.find((j) => !excludeIds.has(j.id))
+    if (!job) return null
 
-    const job = queued[0]
+    const saved = this.jobRepo.readContext(job.id) ?? {}
+
     return {
       jobId: job.id,
       context: {
+        ...saved,
         jobId: job.id,
         url: job.url,
         deviceId: job.deviceId ?? undefined,
         sourceId: job.sourceId ?? undefined
-      }
+      } as JobContext
     }
   }
 
   async requeueFailed(jobId: string): Promise<void> {
+    const job = this.jobRepo.findById(jobId)
+    if (!job) throw new Error('Job not found')
+
+    const steps = createJobSteps(job.type as JobType)
+    const saved = this.jobRepo.readContext(jobId) ?? {}
+    const downloadPath = typeof saved.downloadPath === 'string' ? saved.downloadPath : undefined
+
+    // A job whose file is already on disk (installed from a local file, or
+    // re-run from history) must not restart at "detect source" — its URL may
+    // not even be fetchable. Resume from validation instead.
+    const hasLocalFile = Boolean(downloadPath && existsSync(downloadPath))
+
+    this.jobRepo.clearError(jobId)
     this.jobRepo.updateStatus(jobId, 'queued')
-    this.jobRepo.updateProgress(jobId, 0, 'detect_source')
-    this.eventBus.job(jobId, 'info', 'Job requeued for retry')
+    this.jobRepo.updateProgress(jobId, 0, hasLocalFile ? 'validate_package' : steps[0].name)
+
+    this.jobRepo.saveContext(
+      jobId,
+      hasLocalFile
+        ? { ...saved, jobId, url: job.url, deviceId: job.deviceId ?? undefined }
+        : { jobId, url: job.url, deviceId: job.deviceId ?? undefined }
+    )
+
+    this.eventBus.job(
+      jobId,
+      'info',
+      hasLocalFile ? 'Job requeued — reusing the downloaded file' : 'Job requeued for retry'
+    )
   }
 
   getActiveCount(): number {
     return this.jobRepo.countByStatus('running')
+  }
+
+  private labelFor(type: JobType): string {
+    if (type === 'download') return 'Download'
+    if (type === 'analyze') return 'Analysis'
+    return 'Install'
   }
 }

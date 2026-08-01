@@ -1,4 +1,3 @@
-import { statSync } from 'fs'
 import AdmZip from 'adm-zip'
 import { PackageType } from './types'
 

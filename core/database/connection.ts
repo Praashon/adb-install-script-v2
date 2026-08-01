@@ -99,6 +99,7 @@ function runMigrations(): void {
       total_steps INTEGER NOT NULL DEFAULT 7,
       source_id TEXT REFERENCES sources(id),
       device_id TEXT REFERENCES devices(id),
+      context TEXT,
       result TEXT,
       error TEXT,
       created_at INTEGER NOT NULL,
@@ -177,20 +178,43 @@ function runMigrations(): void {
     sql`CREATE INDEX IF NOT EXISTS idx_installed_apps_device ON installed_apps(device_id)`,
   );
 
+  // Columns added after the initial release: bring older databases up to date.
+  ensureColumn("jobs", "context", "TEXT");
+
+  // Older builds seeded the literal "adb", which pins the app to PATH and skips
+  // SDK auto-detection. An empty value means "find it for me".
+  db.run(sql`UPDATE settings SET value = '' WHERE key = 'adb.path' AND value = 'adb'`);
+
   seedDefaultSettings();
+}
+
+function ensureColumn(table: string, column: string, ddl: string): void {
+  if (!sqlite) return;
+
+  const columns = sqlite
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as { name: string }[];
+
+  if (columns.some((c) => c.name === column)) return;
+
+  sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }
 
 function seedDefaultSettings(): void {
   if (!db) return;
 
   const defaults: Record<string, string> = {
-    "adb.path": "adb",
+    "adb.path": "",
     "download.directory": "",
     "download.maxConcurrent": "2",
     "download.maxRetries": "3",
     "ui.theme": "dark",
     "browser.enabled": "true",
+    "browser.assisted": "false",
     "adapter.autoUpdate": "true",
+    "install.allowDowngrade": "false",
+    "install.grantPermissions": "false",
+    "install.launchAfterInstall": "false",
   };
 
   const now = Date.now();

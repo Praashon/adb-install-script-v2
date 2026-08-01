@@ -1,15 +1,16 @@
 import { createWriteStream } from 'fs'
-import { mkdir } from 'fs/promises'
-import { dirname, join } from 'path'
-import { EventBus } from '@core/event-bus/eventBus'
+import { mkdir, unlink } from 'fs/promises'
+import { dirname } from 'path'
 import { pipeline } from 'stream/promises'
 import { Readable } from 'stream'
+import { EventBus } from '@core/event-bus/eventBus'
 
 export interface DownloadOptions {
   url: string
   outputPath: string
   headers?: Record<string, string>
   jobId?: string
+  signal?: AbortSignal
   onProgress?: (downloaded: number, total: number | null, speed: number) => void
 }
 
@@ -20,24 +21,24 @@ export interface DownloadResult {
   duration: number
 }
 
+const DEFAULT_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
 export class Downloader {
   constructor(private eventBus: EventBus) {}
 
   async download(options: DownloadOptions): Promise<DownloadResult> {
-    const { url, outputPath, headers = {}, jobId } = options
+    const { url, outputPath, headers = {}, jobId, signal } = options
 
     await mkdir(dirname(outputPath), { recursive: true })
 
     const startTime = Date.now()
-
     this.eventBus.download('info', `Starting download: ${url}`, { jobId })
 
     const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        ...headers
-      },
-      redirect: 'follow'
+      headers: { 'User-Agent': DEFAULT_USER_AGENT, ...headers },
+      redirect: 'follow',
+      signal
     })
 
     if (!response.ok) {
@@ -45,7 +46,7 @@ export class Downloader {
     }
 
     if (!response.body) {
-      throw new Error('Response body is null')
+      throw new Error('Server returned an empty response body')
     }
 
     const contentLength = response.headers.get('content-length')
@@ -53,57 +54,51 @@ export class Downloader {
     const mimeType = response.headers.get('content-type') || undefined
 
     let downloaded = 0
-    let lastProgressUpdate = 0
+    let lastTick = startTime
     let lastBytes = 0
-    let speed = 0
 
-    const reader = response.body.getReader()
-    const writeStream = createWriteStream(outputPath)
+    const source = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
 
-    const readable = new Readable({
-      async read() {
-        try {
-          const { done, value } = await reader.read()
-          if (done) {
-            this.push(null)
-            return
-          }
+    source.on('data', (chunk: Buffer) => {
+      downloaded += chunk.length
 
-          downloaded += value.length
-          const now = Date.now()
-          const elapsed = now - lastProgressUpdate
+      const now = Date.now()
+      const elapsed = now - lastTick
+      if (elapsed < 400) return
 
-          if (elapsed >= 500) {
-            speed = ((downloaded - lastBytes) / elapsed) * 1000
-            lastProgressUpdate = now
-            lastBytes = downloaded
+      const speed = ((downloaded - lastBytes) / elapsed) * 1000
+      lastTick = now
+      lastBytes = downloaded
 
-            const progress = totalSize ? (downloaded / totalSize) * 100 : -1
-
-            options.onProgress?.(downloaded, totalSize, speed)
-            this.eventBus?.download('info', 'Download progress', {
-              downloaded,
-              total: totalSize,
-              progress: Math.round(progress),
-              speed: Math.round(speed),
-              jobId
-            })
-          }
-
-          this.push(value)
-        } catch (err) {
-          this.destroy(err instanceof Error ? err : new Error(String(err)))
-        }
-      }
+      options.onProgress?.(downloaded, totalSize, speed)
+      this.eventBus.download('debug', 'Download progress', {
+        downloaded,
+        total: totalSize,
+        progress: totalSize ? Math.round((downloaded / totalSize) * 100) : -1,
+        speed: Math.round(speed),
+        jobId
+      })
     })
 
-    // Bind eventBus to readable for progress callbacks
-    ;(readable as Record<string, unknown>).eventBus = this.eventBus
+    try {
+      await pipeline(source, createWriteStream(outputPath), { signal })
+    } catch (error) {
+      // Never leave a truncated file behind for the validator to choke on.
+      await unlink(outputPath).catch(() => {})
+      if (signal?.aborted) throw new Error('Download aborted')
+      throw error
+    }
 
-    await pipeline(readable, writeStream)
+    if (totalSize !== null && downloaded < totalSize) {
+      await unlink(outputPath).catch(() => {})
+      throw new Error(
+        `Download incomplete: received ${downloaded} of ${totalSize} bytes`
+      )
+    }
 
     const duration = Date.now() - startTime
 
+    options.onProgress?.(downloaded, totalSize, 0)
     this.eventBus.download('info', 'Download complete', {
       filePath: outputPath,
       fileSize: downloaded,
@@ -111,11 +106,6 @@ export class Downloader {
       jobId
     })
 
-    return {
-      filePath: outputPath,
-      fileSize: downloaded,
-      mimeType,
-      duration
-    }
+    return { filePath: outputPath, fileSize: downloaded, mimeType, duration }
   }
 }

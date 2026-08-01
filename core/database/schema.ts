@@ -48,6 +48,7 @@ export const jobs = sqliteTable('jobs', {
   totalSteps: integer('total_steps').notNull().default(7),
   sourceId: text('source_id').references(() => sources.id),
   deviceId: text('device_id').references(() => devices.id),
+  context: text('context'),
   result: text('result'),
   error: text('error'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

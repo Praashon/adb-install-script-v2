@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { SourceRepository } from '@core/database/repositories/sourceRepository'
 import { AdapterRepository } from '@core/database/repositories/adapterRepository'
@@ -10,43 +10,80 @@ export interface LoadedAdapter {
   manifest: AdapterManifest
   rules: AdapterRules
   sandboxed: SandboxedAdapter
+  pluginDir: string
+  isBuiltIn: boolean
+}
+
+export interface AdapterBundle {
+  manifest: AdapterManifest
+  rules: AdapterRules
+}
+
+/** Used for sites with no registered adapter — pure auto-detection. */
+const GENERIC_RULES: AdapterRules = {
+  version: 1,
+  parserType: 'html',
+  rules: {
+    fallbackSelectors: [
+      "a[href$='.apk']",
+      "a[href$='.xapk']",
+      "a[href$='.apks']",
+      "a[href*='download']"
+    ],
+    downloadButtonText: ['Download APK', 'Download XAPK', 'Download', 'Direct Download']
+  },
+  downloadStrategy: 'html',
+  metadata: { requiresBrowser: false, maxRedirects: 5, timeout: 30000 }
 }
 
 export class AdapterManager {
   private validator = new AdapterValidator()
   private sandbox = new AdapterSandbox()
   private loadedAdapters = new Map<string, LoadedAdapter>()
+  private fallbackAdapter: SandboxedAdapter
 
   constructor(
     private sourceRepo: SourceRepository,
     private adapterRepo: AdapterRepository,
-    private pluginsDir: string
-  ) {}
-
-  async loadAll(): Promise<void> {
-    this.loadedAdapters.clear()
-
-    if (!existsSync(this.pluginsDir)) return
-
-    const pluginDirs = readdirSync(this.pluginsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name)
-
-    for (const pluginName of pluginDirs) {
-      try {
-        await this.loadPlugin(pluginName)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        console.error(`Failed to load plugin "${pluginName}": ${message}`)
-      }
-    }
+    private builtInPluginsDir: string,
+    private userPluginsDir: string
+  ) {
+    this.fallbackAdapter = this.sandbox.wrap(GENERIC_RULES)
   }
 
-  private async loadPlugin(pluginName: string): Promise<void> {
-    const pluginDir = join(this.pluginsDir, pluginName)
-    const manifestPath = join(pluginDir, 'manifest.json')
+  async loadAll(): Promise<{ loaded: number; failed: { plugin: string; error: string }[] }> {
+    this.loadedAdapters.clear()
+    this.fallbackAdapter = this.sandbox.wrap(GENERIC_RULES)
 
-    if (!existsSync(manifestPath)) return
+    const failed: { plugin: string; error: string }[] = []
+    let loaded = 0
+
+    for (const [dir, isBuiltIn] of [
+      [this.builtInPluginsDir, true],
+      [this.userPluginsDir, false]
+    ] as const) {
+      if (!existsSync(dir)) continue
+
+      const pluginDirs = readdirSync(dir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+
+      for (const pluginName of pluginDirs) {
+        try {
+          if (await this.loadPlugin(join(dir, pluginName), isBuiltIn)) loaded++
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          failed.push({ plugin: pluginName, error: message })
+        }
+      }
+    }
+
+    return { loaded, failed }
+  }
+
+  private async loadPlugin(pluginDir: string, isBuiltIn: boolean): Promise<boolean> {
+    const manifestPath = join(pluginDir, 'manifest.json')
+    if (!existsSync(manifestPath)) return false
 
     const rawManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
     const manifestResult = this.validator.validateManifest(rawManifest)
@@ -71,6 +108,14 @@ export class AdapterManager {
     }
 
     const rules = rawRules as AdapterRules
+    const sandboxed = this.sandbox.wrap(rules)
+
+    // A "*" plugin is the catch-all used when no site-specific adapter exists.
+    // It is not a browsable source, so it never gets a row in the sources table.
+    if (manifest.domain === '*') {
+      this.fallbackAdapter = sandboxed
+      return true
+    }
 
     let source = this.sourceRepo.findByDomain(manifest.domain)
     if (!source) {
@@ -79,16 +124,16 @@ export class AdapterManager {
         name: manifest.name,
         url: `https://${manifest.domain}`,
         pluginPath: pluginDir,
-        isBuiltIn: true
+        isBuiltIn
       })
       source = this.sourceRepo.findById(sourceId)!
+    } else if (source.pluginPath !== pluginDir) {
+      this.sourceRepo.update(source.id, { pluginPath: pluginDir })
     }
 
     const existingAdapter = this.adapterRepo.findActiveBySourceId(source.id)
     if (!existingAdapter || existingAdapter.version < version) {
-      if (existingAdapter) {
-        this.adapterRepo.deactivate(existingAdapter.id)
-      }
+      if (existingAdapter) this.adapterRepo.deactivate(existingAdapter.id)
       this.adapterRepo.create({
         sourceId: source.id,
         version,
@@ -97,22 +142,39 @@ export class AdapterManager {
       })
     }
 
-    const sandboxed = this.sandbox.wrap(rules)
-
     this.loadedAdapters.set(manifest.domain, {
       sourceId: source.id,
       manifest,
       rules,
-      sandboxed
+      sandboxed,
+      pluginDir,
+      isBuiltIn
     })
+
+    return true
   }
 
   getAdapter(domain: string): LoadedAdapter | undefined {
-    const adapter = this.loadedAdapters.get(domain)
-    if (adapter) return adapter
+    if (!domain) return undefined
 
-    const baseDomain = domain.split('.').slice(-2).join('.')
-    return this.loadedAdapters.get(baseDomain)
+    const normalized = domain.replace(/^www\./, '').toLowerCase()
+    const exact = this.loadedAdapters.get(normalized)
+    if (exact) return exact
+
+    const baseDomain = normalized.split('.').slice(-2).join('.')
+    const base = this.loadedAdapters.get(baseDomain)
+    if (base) return base
+
+    // Match subdomains of a registered site (e.g. m.apkpure.com -> apkpure.com).
+    for (const [registered, adapter] of this.loadedAdapters) {
+      if (normalized.endsWith(`.${registered}`)) return adapter
+    }
+
+    return undefined
+  }
+
+  getFallbackAdapter(): SandboxedAdapter {
+    return this.fallbackAdapter
   }
 
   getAdapterBySourceId(sourceId: string): LoadedAdapter | undefined {
@@ -126,64 +188,175 @@ export class AdapterManager {
     return Array.from(this.loadedAdapters.values())
   }
 
-  async saveCustomAdapter(
-    name: string,
-    domain: string,
-    rules: AdapterRules,
-    customPluginsDir: string
-  ): Promise<string> {
-    const fullResult = this.validator.validateAdapterRules(rules)
-    if (!fullResult.valid) {
-      throw new Error(`Adapter validation failed: ${fullResult.errors.join(', ')}`)
+  /** Creates a brand-new user plugin on disk and registers it. */
+  async saveCustomAdapter(name: string, domain: string, rules: AdapterRules): Promise<string> {
+    const normalizedDomain = domain.replace(/^www\./, '').toLowerCase()
+
+    const result = this.validator.validateAdapterRules(rules)
+    if (!result.valid) {
+      throw new Error(`Adapter validation failed: ${result.errors.join(', ')}`)
+    }
+
+    if (this.sourceRepo.findByDomain(normalizedDomain)) {
+      throw new Error(`An adapter for ${normalizedDomain} already exists`)
     }
 
     const manifest: AdapterManifest = {
-      id: domain.replace(/\./g, '-'),
+      id: normalizedDomain.replace(/[^a-z0-9]+/g, '-'),
       name,
-      description: `Custom adapter for ${domain}`,
-      domain,
+      description: `Custom adapter for ${normalizedDomain}`,
+      domain: normalizedDomain,
       author: 'user',
-      supportedFormats: ['apk', 'xapk'],
-      currentVersion: 1,
+      supportedFormats: ['apk', 'xapk', 'apks'],
+      currentVersion: rules.version ?? 1,
       status: 'healthy',
       createdAt: new Date().toISOString()
     }
 
-    const pluginDir = join(customPluginsDir, manifest.id)
-    const versionDir = join(pluginDir, 'v1')
-
-    const { mkdirSync, writeFileSync } = await import('fs')
-    mkdirSync(versionDir, { recursive: true })
-    writeFileSync(join(pluginDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
-    writeFileSync(join(versionDir, 'adapter.json'), JSON.stringify(rules, null, 2))
+    const pluginDir = join(this.userPluginsDir, manifest.id)
+    this.writePlugin(pluginDir, manifest, rules)
 
     const sourceId = this.sourceRepo.create({
-      domain,
+      domain: normalizedDomain,
       name,
-      url: `https://${domain}`,
+      url: `https://${normalizedDomain}`,
       pluginPath: pluginDir,
       isBuiltIn: false
     })
 
     this.adapterRepo.create({
       sourceId,
-      version: 1,
+      version: manifest.currentVersion,
       rules: rules.rules as Record<string, unknown>,
       downloadStrategy: rules.downloadStrategy
     })
 
-    const sandboxed = this.sandbox.wrap(rules)
-    this.loadedAdapters.set(domain, {
+    this.loadedAdapters.set(normalizedDomain, {
       sourceId,
       manifest,
       rules,
-      sandboxed
+      sandboxed: this.sandbox.wrap(rules),
+      pluginDir,
+      isBuiltIn: false
     })
 
     return sourceId
   }
 
-  removeAdapter(domain: string): void {
-    this.loadedAdapters.delete(domain)
+  /** Writes a new adapter version for an existing source. */
+  async updateAdapter(sourceId: string, rules: AdapterRules, name?: string): Promise<void> {
+    const source = this.sourceRepo.findById(sourceId)
+    if (!source) throw new Error('Source not found')
+
+    const result = this.validator.validateAdapterRules(rules)
+    if (!result.valid) {
+      throw new Error(`Adapter validation failed: ${result.errors.join(', ')}`)
+    }
+
+    const nextVersion = this.adapterRepo.getNextVersion(sourceId)
+    const existing = this.loadedAdapters.get(source.domain)
+    const pluginDir =
+      existing?.pluginDir ??
+      source.pluginPath ??
+      join(this.userPluginsDir, source.domain.replace(/[^a-z0-9]+/g, '-'))
+
+    const manifest: AdapterManifest = {
+      ...(existing?.manifest ?? {
+        id: source.domain.replace(/[^a-z0-9]+/g, '-'),
+        description: `Adapter for ${source.domain}`,
+        domain: source.domain,
+        author: 'user',
+        supportedFormats: ['apk', 'xapk', 'apks'],
+        status: 'healthy',
+        createdAt: new Date().toISOString()
+      }),
+      name: name ?? existing?.manifest.name ?? source.name,
+      currentVersion: nextVersion
+    } as AdapterManifest
+
+    const versionedRules: AdapterRules = { ...rules, version: nextVersion }
+    this.writePlugin(pluginDir, manifest, versionedRules)
+
+    const active = this.adapterRepo.findActiveBySourceId(sourceId)
+    if (active) this.adapterRepo.deactivate(active.id)
+
+    this.adapterRepo.create({
+      sourceId,
+      version: nextVersion,
+      rules: versionedRules.rules as Record<string, unknown>,
+      downloadStrategy: versionedRules.downloadStrategy
+    })
+
+    if (name && name !== source.name) {
+      this.sourceRepo.update(sourceId, { name })
+    }
+    this.sourceRepo.update(sourceId, { pluginPath: pluginDir, status: 'healthy' })
+
+    this.loadedAdapters.set(source.domain, {
+      sourceId,
+      manifest,
+      rules: versionedRules,
+      sandboxed: this.sandbox.wrap(versionedRules),
+      pluginDir,
+      isBuiltIn: existing?.isBuiltIn ?? false
+    })
+  }
+
+  exportBundle(sourceId: string): AdapterBundle {
+    const adapter = this.getAdapterBySourceId(sourceId)
+    if (!adapter) throw new Error('No adapter is loaded for this source')
+    return { manifest: adapter.manifest, rules: adapter.rules }
+  }
+
+  /** Imports a `{ manifest, rules }` bundle exported by this app. */
+  async importBundle(raw: unknown): Promise<string> {
+    if (!raw || typeof raw !== 'object') {
+      throw new Error('Plugin file must contain a JSON object')
+    }
+
+    const bundle = raw as Partial<AdapterBundle>
+    if (!bundle.manifest || !bundle.rules) {
+      throw new Error('Plugin file must contain both "manifest" and "rules"')
+    }
+
+    const full = this.validator.validateFull(bundle.manifest, bundle.rules)
+    if (!full.valid) {
+      throw new Error(full.errors.join(', '))
+    }
+
+    const manifest = bundle.manifest as AdapterManifest
+    const rules = bundle.rules as AdapterRules
+    const domain = manifest.domain.replace(/^www\./, '').toLowerCase()
+
+    const existing = this.sourceRepo.findByDomain(domain)
+    if (existing) {
+      await this.updateAdapter(existing.id, rules, manifest.name)
+      return existing.id
+    }
+
+    return this.saveCustomAdapter(manifest.name, domain, rules)
+  }
+
+  /** Removes a source, its adapter versions, and any user plugin files. */
+  removeSource(sourceId: string): void {
+    const source = this.sourceRepo.findById(sourceId)
+    if (!source) throw new Error('Source not found')
+
+    const adapter = this.getAdapterBySourceId(sourceId)
+
+    // Only ever delete files we wrote into the user plugin directory.
+    if (adapter && !adapter.isBuiltIn && adapter.pluginDir.startsWith(this.userPluginsDir)) {
+      rmSync(adapter.pluginDir, { recursive: true, force: true })
+    }
+
+    this.loadedAdapters.delete(source.domain)
+    this.sourceRepo.remove(sourceId)
+  }
+
+  private writePlugin(pluginDir: string, manifest: AdapterManifest, rules: AdapterRules): void {
+    const versionDir = join(pluginDir, `v${manifest.currentVersion}`)
+    mkdirSync(versionDir, { recursive: true })
+    writeFileSync(join(pluginDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8')
+    writeFileSync(join(versionDir, 'adapter.json'), JSON.stringify(rules, null, 2), 'utf-8')
   }
 }

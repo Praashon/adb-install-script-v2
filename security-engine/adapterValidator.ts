@@ -79,7 +79,11 @@ export class AdapterValidator {
       errors.push('Field "name" must be a non-empty string')
     }
 
-    if (typeof manifest.domain !== 'string' || !manifest.domain.includes('.')) {
+    // "*" marks the catch-all adapter used when no site-specific one matches.
+    if (
+      typeof manifest.domain !== 'string' ||
+      (manifest.domain !== '*' && !manifest.domain.includes('.'))
+    ) {
       errors.push('Field "domain" must be a valid domain name')
     }
 

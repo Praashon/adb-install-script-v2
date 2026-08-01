@@ -2,7 +2,7 @@ import { createReadStream } from 'fs'
 import { stat } from 'fs/promises'
 import { createHash } from 'crypto'
 import AdmZip from 'adm-zip'
-import { FingerprintInfo } from './types'
+import { FingerprintInfo } from '../types'
 
 export class Fingerprint {
   async generate(filePath: string): Promise<FingerprintInfo> {

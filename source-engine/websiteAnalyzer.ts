@@ -1,6 +1,9 @@
 import * as cheerio from 'cheerio'
 import { AnalysisResult, DetectedLink, DetectedButton, SuggestedRules, PageMetadata } from './types'
 
+/** A cheerio-wrapped node, i.e. whatever `$(...)` returns. */
+type WrappedElement = ReturnType<cheerio.CheerioAPI>
+
 const DOWNLOAD_KEYWORDS = [
   'download', 'install', 'get', 'free download', 'apk download',
   'direct download', 'latest version', 'download apk'
@@ -83,7 +86,7 @@ export class WebsiteAnalyzer {
       }
 
       if (confidence > 0) {
-        const selector = this.buildSelector($, el)
+        const selector = this.buildSelector($(el))
         links.push({ url: fullUrl, text, selector, fileExtension, confidence })
       }
     })
@@ -117,7 +120,7 @@ export class WebsiteAnalyzer {
       }
 
       if (confidence > 0) {
-        const selector = this.buildSelector($, el)
+        const selector = this.buildSelector($(el))
         buttons.push({
           text: $(el).text().trim(),
           selector,
@@ -190,12 +193,11 @@ export class WebsiteAnalyzer {
     return Math.min(confidence, 100)
   }
 
-  private buildSelector($: cheerio.CheerioAPI, el: cheerio.AnyNode): string {
-    const element = $(el)
+  private buildSelector(element: WrappedElement): string {
     const id = element.attr('id')
     if (id) return `#${id}`
 
-    const tag = (el as cheerio.Element).tagName || 'div'
+    const tag = (element.prop('tagName') || 'div').toLowerCase()
     const classes = (element.attr('class') || '').trim().split(/\s+/).filter(Boolean)
 
     if (classes.length > 0) {

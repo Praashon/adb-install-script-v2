@@ -41,14 +41,61 @@ export interface JobDefinition {
 export interface JobContext {
   jobId: string
   url: string
+  /** Primary key of the `devices` row this job installs to. */
   deviceId?: string
+  /** ADB serial of that device — what the adb CLI actually needs. */
+  deviceSerial?: string
   sourceId?: string
+  sourceName?: string
+  domain?: string
+  detectionType?: string
+  downloadId?: string
   downloadUrl?: string
   downloadPath?: string
+  downloadHeaders?: Record<string, string>
+  filename?: string
+  fileSize?: number
+  sha256?: string
+  strategy?: string
   packageType?: string
   packageName?: string
+  versionName?: string
+  versionCode?: number
+  architecture?: string
+  certificate?: string
   apkFiles?: string[]
   obbFiles?: string[]
+  installedAppId?: string
+}
+
+/**
+ * Passed to every step executor. Steps use these to report fine-grained
+ * progress, emit user-visible log lines, and cooperate with cancel/pause.
+ */
+export interface StepHelpers {
+  /** Progress *within* the current step, 0..1. Scaled into the job's overall bar. */
+  setStepProgress(fraction: number): void
+  log(level: 'debug' | 'info' | 'warn' | 'error', message: string, data?: Record<string, unknown>): void
+  /** Aborts when the job is cancelled or paused — pass to fetch/adb calls. */
+  signal: AbortSignal
+  throwIfAborted(): void
+}
+
+export type StepExecutor = (
+  context: JobContext,
+  helpers: StepHelpers
+) => Promise<JobContext>
+
+/**
+ * A failure that retrying cannot fix — a site blocking automated access, a
+ * missing device, a corrupt package. The runner fails the job immediately
+ * instead of burning the retry budget.
+ */
+export class NonRetryableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NonRetryableError'
+  }
 }
 
 export const INSTALL_STEPS: Omit<JobStep, 'status'>[] = [

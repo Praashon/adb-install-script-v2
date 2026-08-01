@@ -72,11 +72,12 @@ export class DownloadResolver {
   }
 
   private isDirectApkUrl(url: string): boolean {
-    const lower = url.toLowerCase()
-    return ['.apk', '.xapk', '.apks'].some((ext) => {
+    try {
       const pathname = new URL(url).pathname.toLowerCase()
-      return pathname.endsWith(ext)
-    })
+      return ['.apk', '.xapk', '.apks'].some((ext) => pathname.endsWith(ext))
+    } catch {
+      return false
+    }
   }
 
   private extractFilename(url: string): string {
