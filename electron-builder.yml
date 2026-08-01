@@ -1,0 +1,37 @@
+appId: com.adb-installer-pro.app
+productName: ADB APK Installer Pro
+directories:
+  buildResources: resources
+  output: release
+files:
+  - out/**/*
+  - sources/plugins/**/*
+  - "!node_modules/**/{test,tests,__tests__}/**"
+  - "!node_modules/**/*.{md,ts,map}"
+asarUnpack:
+  - "node_modules/better-sqlite3/**"
+  - "node_modules/playwright-core/**"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+  artifactName: "${productName}-${version}-Setup.${ext}"
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ADB APK Installer Pro
+extraResources:
+  - from: sources/plugins
+    to: sources/plugins
+    filter:
+      - "**/*"
+  - from: storage
+    to: storage
+    filter:
+      - ".gitkeep"
+publish: null

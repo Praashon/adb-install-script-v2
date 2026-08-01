@@ -1,0 +1,45 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["core/*"],
+      "@source-engine/*": ["source-engine/*"],
+      "@browser-engine/*": ["browser-engine/*"],
+      "@download-engine/*": ["download-engine/*"],
+      "@apk-engine/*": ["apk-engine/*"],
+      "@adb-engine/*": ["adb-engine/*"],
+      "@security-engine/*": ["security-engine/*"],
+      "@adapter-monitor/*": ["adapter-monitor/*"]
+    }
+  },
+  "include": [
+    "electron/**/*.ts",
+    "core/**/*.ts",
+    "source-engine/**/*.ts",
+    "browser-engine/**/*.ts",
+    "download-engine/**/*.ts",
+    "apk-engine/**/*.ts",
+    "adb-engine/**/*.ts",
+    "security-engine/**/*.ts",
+    "adapter-monitor/**/*.ts",
+    "tests/**/*.ts",
+    "electron.vite.config.ts",
+    "vitest.config.ts"
+  ]
+}
