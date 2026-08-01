@@ -2,27 +2,20 @@ import Database from "better-sqlite3";
 import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { sql } from "drizzle-orm";
 import * as schema from "./schema";
-
 let db: BetterSQLite3Database<typeof schema> | null = null;
 let sqlite: Database.Database | null = null;
-
 export function initializeDatabase(
   dbPath: string,
 ): BetterSQLite3Database<typeof schema> {
   if (db) return db;
-
   sqlite = new Database(dbPath);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("busy_timeout = 5000");
-
   db = drizzle(sqlite, { schema });
-
   runMigrations();
-
   return db;
 }
-
 export function getDatabase(): BetterSQLite3Database<typeof schema> {
   if (!db) {
     throw new Error(
@@ -31,7 +24,6 @@ export function getDatabase(): BetterSQLite3Database<typeof schema> {
   }
   return db;
 }
-
 export function closeDatabase(): void {
   if (sqlite) {
     sqlite.close();
@@ -39,10 +31,8 @@ export function closeDatabase(): void {
     db = null;
   }
 }
-
 function runMigrations(): void {
   if (!db) return;
-
   db.run(sql`
     CREATE TABLE IF NOT EXISTS sources (
       id TEXT PRIMARY KEY,
@@ -56,7 +46,6 @@ function runMigrations(): void {
       updated_at INTEGER NOT NULL
     )
   `);
-
   db.run(sql`
     CREATE TABLE IF NOT EXISTS adapter_versions (
       id TEXT PRIMARY KEY,
@@ -72,7 +61,6 @@ function runMigrations(): void {
       created_at INTEGER NOT NULL
     )
   `);
-
   db.run(sql`
     CREATE TABLE IF NOT EXISTS devices (
       id TEXT PRIMARY KEY,
@@ -87,7 +75,6 @@ function runMigrations(): void {
       created_at INTEGER NOT NULL
     )
   `);
-
   db.run(sql`
     CREATE TABLE IF NOT EXISTS jobs (
       id TEXT PRIMARY KEY,
@@ -106,7 +93,6 @@ function runMigrations(): void {
       updated_at INTEGER NOT NULL
     )
   `);
-
   db.run(sql`
     CREATE TABLE IF NOT EXISTS downloads (
       id TEXT PRIMARY KEY,
@@ -125,7 +111,6 @@ function runMigrations(): void {
       created_at INTEGER NOT NULL
     )
   `);
-
   db.run(sql`
     CREATE TABLE IF NOT EXISTS installed_apps (
       id TEXT PRIMARY KEY,
@@ -141,7 +126,6 @@ function runMigrations(): void {
       installed_at INTEGER NOT NULL
     )
   `);
-
   db.run(sql`
     CREATE TABLE IF NOT EXISTS logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,7 +137,6 @@ function runMigrations(): void {
       created_at INTEGER NOT NULL
     )
   `);
-
   db.run(sql`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
@@ -161,7 +144,6 @@ function runMigrations(): void {
       updated_at INTEGER NOT NULL
     )
   `);
-
   db.run(sql`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`);
   db.run(
     sql`CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status)`,
@@ -177,32 +159,22 @@ function runMigrations(): void {
   db.run(
     sql`CREATE INDEX IF NOT EXISTS idx_installed_apps_device ON installed_apps(device_id)`,
   );
-
-  // Columns added after the initial release: bring older databases up to date.
   ensureColumn("jobs", "context", "TEXT");
-
-  // Older builds seeded the literal "adb", which pins the app to PATH and skips
-  // SDK auto-detection. An empty value means "find it for me".
-  db.run(sql`UPDATE settings SET value = '' WHERE key = 'adb.path' AND value = 'adb'`);
-
+  db.run(
+    sql`UPDATE settings SET value = '' WHERE key = 'adb.path' AND value = 'adb'`,
+  );
   seedDefaultSettings();
 }
-
 function ensureColumn(table: string, column: string, ddl: string): void {
   if (!sqlite) return;
-
-  const columns = sqlite
-    .prepare(`PRAGMA table_info(${table})`)
-    .all() as { name: string }[];
-
+  const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+  }[];
   if (columns.some((c) => c.name === column)) return;
-
   sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }
-
 function seedDefaultSettings(): void {
   if (!db) return;
-
   const defaults: Record<string, string> = {
     "adb.path": "",
     "download.directory": "",
@@ -216,7 +188,6 @@ function seedDefaultSettings(): void {
     "install.grantPermissions": "false",
     "install.launchAfterInstall": "false",
   };
-
   const now = Date.now();
   for (const [key, value] of Object.entries(defaults)) {
     db.run(

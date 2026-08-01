@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Folder,
   Trash2,
@@ -12,127 +12,135 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
-  Eraser
-} from 'lucide-react'
-import { downloadService, jobService } from '@/services'
-import { useAppStore, notify } from '@/stores/appStore'
-import { Modal, ConfirmDialog } from '@/components/Modal'
-import { cn, formatBytes, formatDate } from '@/lib/utils'
-import { STEP_LABELS, type Download, type Job, type LogEntry } from '@/types'
-
+  Eraser,
+} from "lucide-react";
+import { downloadService, jobService } from "@/services";
+import { useAppStore, notify } from "@/stores/appStore";
+import { Modal, ConfirmDialog } from "@/components/Modal";
+import { cn, formatBytes, formatDate } from "@/lib/utils";
+import { STEP_LABELS, type Download, type Job, type LogEntry } from "@/types";
 export function DownloadsPage() {
-  const jobs = useAppStore((s) => s.jobs)
-  const setJobs = useAppStore((s) => s.setJobs)
-  const preferredDevice = useAppStore((s) => s.preferredDevice)()
-
-  const [downloads, setDownloads] = useState<Download[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [logJob, setLogJob] = useState<Job | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<Download | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [confirmClear, setConfirmClear] = useState(false)
-
+  const jobs = useAppStore((s) => s.jobs);
+  const setJobs = useAppStore((s) => s.setJobs);
+  const preferredDevice = useAppStore((s) => s.preferredDevice)();
+  const [downloads, setDownloads] = useState<Download[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [logJob, setLogJob] = useState<Job | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Download | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const loadDownloads = useCallback(async () => {
     try {
-      setDownloads(await downloadService.getAll())
+      setDownloads(await downloadService.getAll());
     } catch (error) {
-      notify.error('Could not load downloads', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Could not load downloads",
+        error instanceof Error ? error.message : undefined,
+      );
     }
-  }, [])
-
+  }, []);
   useEffect(() => {
-    void loadDownloads()
-  }, [loadDownloads])
-
-  // Job rows arrive over the event bus; the download table only changes when a
-  // job finishes, so refresh it whenever the job set settles.
+    void loadDownloads();
+  }, [loadDownloads]);
   const finishedCount = jobs.filter((j) =>
-    ['completed', 'failed', 'cancelled'].includes(j.status)
-  ).length
-
+    ["completed", "failed", "cancelled"].includes(j.status),
+  ).length;
   useEffect(() => {
-    void loadDownloads()
-  }, [finishedCount, loadDownloads])
-
-  const activeJobs = jobs.filter((j) => ['queued', 'running', 'paused'].includes(j.status))
-  const finishedJobs = jobs.filter((j) => ['failed', 'cancelled'].includes(j.status))
-
+    void loadDownloads();
+  }, [finishedCount, loadDownloads]);
+  const activeJobs = jobs.filter((j) =>
+    ["queued", "running", "paused"].includes(j.status),
+  );
+  const finishedJobs = jobs.filter((j) =>
+    ["failed", "cancelled"].includes(j.status),
+  );
   const filteredDownloads = useMemo(() => {
-    const needle = searchQuery.trim().toLowerCase()
-    if (!needle) return downloads
+    const needle = searchQuery.trim().toLowerCase();
+    if (!needle) return downloads;
     return downloads.filter(
       (d) =>
         d.filename.toLowerCase().includes(needle) ||
-        (d.packageName ?? '').toLowerCase().includes(needle)
-    )
-  }, [downloads, searchQuery])
-
-  const withRefresh = async (action: () => Promise<unknown>, failure: string): Promise<void> => {
+        (d.packageName ?? "").toLowerCase().includes(needle),
+    );
+  }, [downloads, searchQuery]);
+  const withRefresh = async (
+    action: () => Promise<unknown>,
+    failure: string,
+  ): Promise<void> => {
     try {
-      await action()
-      setJobs(await jobService.getAll())
+      await action();
+      setJobs(await jobService.getAll());
     } catch (error) {
-      notify.error(failure, error instanceof Error ? error.message : undefined)
+      notify.error(failure, error instanceof Error ? error.message : undefined);
     }
-  }
-
+  };
   const handlePauseResume = (job: Job): Promise<void> =>
     withRefresh(
-      () => (job.status === 'paused' ? jobService.resume(job.id) : jobService.pause(job.id)),
-      job.status === 'paused' ? 'Could not resume' : 'Could not pause'
-    )
-
+      () =>
+        job.status === "paused"
+          ? jobService.resume(job.id)
+          : jobService.pause(job.id),
+      job.status === "paused" ? "Could not resume" : "Could not pause",
+    );
   const handleCancel = (jobId: string): Promise<void> =>
-    withRefresh(() => jobService.cancel(jobId), 'Could not cancel')
-
+    withRefresh(() => jobService.cancel(jobId), "Could not cancel");
   const handleRetry = (jobId: string): Promise<void> =>
-    withRefresh(() => jobService.retry(jobId), 'Could not retry')
-
+    withRefresh(() => jobService.retry(jobId), "Could not retry");
   const handleRemoveJob = (jobId: string): Promise<void> =>
-    withRefresh(() => jobService.remove(jobId), 'Could not remove job')
-
+    withRefresh(() => jobService.remove(jobId), "Could not remove job");
   const reinstall = async (download: Download): Promise<void> => {
     try {
-      await downloadService.install(download.id, preferredDevice?.serial)
-      setJobs(await jobService.getAll())
-      notify.success('Install queued', download.filename)
+      await downloadService.install(download.id, preferredDevice?.serial);
+      setJobs(await jobService.getAll());
+      notify.success("Install queued", download.filename);
     } catch (error) {
-      notify.error('Could not install', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Could not install",
+        error instanceof Error ? error.message : undefined,
+      );
     }
-  }
-
+  };
   const confirmDelete = async (): Promise<void> => {
-    if (!pendingDelete) return
-
-    setIsDeleting(true)
+    if (!pendingDelete) return;
+    setIsDeleting(true);
     try {
-      await downloadService.remove(pendingDelete.id, true)
-      await loadDownloads()
-      notify.success('Deleted', pendingDelete.filename)
-      setPendingDelete(null)
+      await downloadService.remove(pendingDelete.id, true);
+      await loadDownloads();
+      notify.success("Deleted", pendingDelete.filename);
+      setPendingDelete(null);
     } catch (error) {
-      notify.error('Could not delete', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Could not delete",
+        error instanceof Error ? error.message : undefined,
+      );
     } finally {
-      setIsDeleting(false)
+      setIsDeleting(false);
     }
-  }
-
+  };
   const clearFinishedJobs = async (): Promise<void> => {
     try {
-      const removed = await jobService.clearFinished()
-      setJobs(await jobService.getAll())
-      notify.success(removed > 0 ? `Cleared ${removed} finished job(s)` : 'Nothing to clear')
+      const removed = await jobService.clearFinished();
+      setJobs(await jobService.getAll());
+      notify.success(
+        removed > 0 ? `Cleared ${removed} finished job(s)` : "Nothing to clear",
+      );
     } catch (error) {
-      notify.error('Could not clear jobs', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Could not clear jobs",
+        error instanceof Error ? error.message : undefined,
+      );
     }
-  }
-
+  };
   return (
     <div className="max-w-5xl mx-auto py-6">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 mb-1">Downloads &amp; Jobs</h1>
-          <p className="text-slate-400">Monitor active downloads and installation progress</p>
+          <h1 className="text-2xl font-bold text-slate-100 mb-1">
+            Downloads &amp; Jobs
+          </h1>
+          <p className="text-slate-400">
+            Monitor active downloads and installation progress
+          </p>
         </div>
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -180,7 +188,10 @@ export function DownloadsPage() {
                 Needs attention
                 <span className="badge-danger">{finishedJobs.length}</span>
               </h2>
-              <button className="btn-ghost text-xs py-1.5" onClick={() => void clearFinishedJobs()}>
+              <button
+                className="btn-ghost text-xs py-1.5"
+                onClick={() => void clearFinishedJobs()}
+              >
                 <Eraser className="w-3.5 h-3.5" />
                 Clear finished
               </button>
@@ -204,7 +215,10 @@ export function DownloadsPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">History</h2>
             {downloads.length > 0 && (
-              <button className="btn-ghost text-xs py-1.5" onClick={() => setConfirmClear(true)}>
+              <button
+                className="btn-ghost text-xs py-1.5"
+                onClick={() => setConfirmClear(true)}
+              >
                 <Trash2 className="w-3.5 h-3.5" />
                 Clear history
               </button>
@@ -220,21 +234,29 @@ export function DownloadsPage() {
                     <th className="px-6 py-4 font-medium">Size</th>
                     <th className="px-6 py-4 font-medium">Date</th>
                     <th className="px-6 py-4 font-medium">Status</th>
-                    <th className="px-6 py-4 font-medium text-right">Actions</th>
+                    <th className="px-6 py-4 font-medium text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
                   {filteredDownloads.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                      <td
+                        colSpan={5}
+                        className="px-6 py-8 text-center text-slate-500"
+                      >
                         {downloads.length === 0
-                          ? 'No downloaded files yet'
-                          : 'No files match that search'}
+                          ? "No downloaded files yet"
+                          : "No files match that search"}
                       </td>
                     </tr>
                   ) : (
                     filteredDownloads.map((download) => (
-                      <tr key={download.id} className="hover:bg-white/[0.02] transition-colors">
+                      <tr
+                        key={download.id}
+                        className="hover:bg-white/[0.02] transition-colors"
+                      >
                         <td className="px-6 py-4 font-medium text-slate-300 max-w-xs">
                           <div className="truncate" title={download.filename}>
                             {download.filename}
@@ -242,12 +264,16 @@ export function DownloadsPage() {
                           {download.packageName && (
                             <div className="text-xs text-slate-500 font-mono truncate mt-0.5">
                               {download.packageName}
-                              {download.versionName ? ` · v${download.versionName}` : ''}
+                              {download.versionName
+                                ? ` · v${download.versionName}`
+                                : ""}
                             </div>
                           )}
                         </td>
                         <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
-                          {download.fileSize ? formatBytes(download.fileSize) : '-'}
+                          {download.fileSize
+                            ? formatBytes(download.fileSize)
+                            : "-"}
                         </td>
                         <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                           {formatDate(download.createdAt)}
@@ -259,7 +285,10 @@ export function DownloadsPage() {
                           <button
                             className="btn-icon"
                             onClick={() => void reinstall(download)}
-                            disabled={download.status !== 'completed' || !download.filePath}
+                            disabled={
+                              download.status !== "completed" ||
+                              !download.filePath
+                            }
                             title="Install to device"
                           >
                             <Smartphone className="w-4 h-4" />
@@ -271,9 +300,11 @@ export function DownloadsPage() {
                                 .openFolder(download.id)
                                 .catch((error: unknown) =>
                                   notify.error(
-                                    'Could not open folder',
-                                    error instanceof Error ? error.message : undefined
-                                  )
+                                    "Could not open folder",
+                                    error instanceof Error
+                                      ? error.message
+                                      : undefined,
+                                  ),
                                 )
                             }
                             disabled={!download.filePath}
@@ -322,53 +353,61 @@ export function DownloadsPage() {
           void downloadService
             .clearHistory(false)
             .then(() => loadDownloads())
-            .then(() => notify.success('History cleared'))
+            .then(() => notify.success("History cleared"))
             .catch((error: unknown) =>
-              notify.error('Could not clear history', error instanceof Error ? error.message : undefined)
-            )
-          setConfirmClear(false)
+              notify.error(
+                "Could not clear history",
+                error instanceof Error ? error.message : undefined,
+              ),
+            );
+          setConfirmClear(false);
         }}
         onCancel={() => setConfirmClear(false)}
       />
     </div>
-  )
+  );
 }
-
-function StatusBadge({ status }: { status: Download['status'] }) {
-  if (status === 'completed') return <span className="badge-success">Completed</span>
-  if (status === 'failed') return <span className="badge-danger">Failed</span>
-  if (status === 'downloading') return <span className="badge-accent">Downloading</span>
-  return <span className="badge-neutral">{status}</span>
+function StatusBadge({ status }: { status: Download["status"] }) {
+  if (status === "completed")
+    return <span className="badge-success">Completed</span>;
+  if (status === "failed") return <span className="badge-danger">Failed</span>;
+  if (status === "downloading")
+    return <span className="badge-accent">Downloading</span>;
+  return <span className="badge-neutral">{status}</span>;
 }
-
 function ActiveJobCard({
   job,
   onPauseResume,
   onCancel,
-  onLogs
+  onLogs,
 }: {
-  job: Job
-  onPauseResume: () => void
-  onCancel: () => void
-  onLogs: () => void
+  job: Job;
+  onPauseResume: () => void;
+  onCancel: () => void;
+  onLogs: () => void;
 }) {
-  const stepLabel = STEP_LABELS[job.currentStep ?? ''] ?? 'Starting…'
-
+  const stepLabel = STEP_LABELS[job.currentStep ?? ""] ?? "Starting…";
   return (
     <div className="card relative overflow-hidden animate-slide-up border-accent/20">
       <div className="flex justify-between items-start gap-4 mb-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded bg-accent/10 flex items-center justify-center shrink-0">
             <RefreshCw
-              className={cn('w-5 h-5 text-accent', job.status === 'running' && 'animate-spin')}
+              className={cn(
+                "w-5 h-5 text-accent",
+                job.status === "running" && "animate-spin",
+              )}
             />
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-slate-200 truncate" title={job.url}>
+            <h3
+              className="font-semibold text-slate-200 truncate"
+              title={job.url}
+            >
               {job.url}
             </h3>
             <p className="text-xs text-slate-400">
-              {job.status === 'paused' ? 'Paused' : stepLabel}
+              {job.status === "paused" ? "Paused" : stepLabel}
             </p>
           </div>
         </div>
@@ -380,9 +419,9 @@ function ActiveJobCard({
           <button
             className="btn-icon"
             onClick={onPauseResume}
-            title={job.status === 'paused' ? 'Resume' : 'Pause'}
+            title={job.status === "paused" ? "Resume" : "Pause"}
           >
-            {job.status === 'paused' ? (
+            {job.status === "paused" ? (
               <PlayCircle className="w-5 h-5" />
             ) : (
               <PauseCircle className="w-5 h-5" />
@@ -399,50 +438,54 @@ function ActiveJobCard({
       </div>
 
       <div className="progress-bar mt-4">
-        <div className="progress-bar-fill" style={{ width: `${Math.max(2, job.progress)}%` }} />
+        <div
+          className="progress-bar-fill"
+          style={{ width: `${Math.max(2, job.progress)}%` }}
+        />
       </div>
       <div className="flex justify-between text-xs mt-2 text-slate-500">
         <span>{job.status.toUpperCase()}</span>
         <span>{Math.round(job.progress)}%</span>
       </div>
     </div>
-  )
+  );
 }
-
 function FailedJobCard({
   job,
   onRetry,
   onRemove,
-  onLogs
+  onLogs,
 }: {
-  job: Job
-  onRetry: () => void
-  onRemove: () => void
-  onLogs: () => void
+  job: Job;
+  onRetry: () => void;
+  onRemove: () => void;
+  onLogs: () => void;
 }) {
-  const cancelled = job.status === 'cancelled'
-
+  const cancelled = job.status === "cancelled";
   return (
     <div
       className={cn(
-        'card py-4',
-        cancelled ? 'border-white/[0.06]' : 'border-danger/20 bg-danger/[0.03]'
+        "card py-4",
+        cancelled ? "border-white/[0.06]" : "border-danger/20 bg-danger/[0.03]",
       )}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0">
           <AlertCircle
             className={cn(
-              'w-5 h-5 mt-0.5 shrink-0',
-              cancelled ? 'text-slate-500' : 'text-danger-light'
+              "w-5 h-5 mt-0.5 shrink-0",
+              cancelled ? "text-slate-500" : "text-danger-light",
             )}
           />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-200 truncate" title={job.url}>
+            <p
+              className="text-sm font-medium text-slate-200 truncate"
+              title={job.url}
+            >
               {job.url}
             </p>
             <p className="text-xs text-slate-400 mt-1 break-words selectable">
-              {cancelled ? 'Cancelled' : job.error || 'Failed'}
+              {cancelled ? "Cancelled" : job.error || "Failed"}
             </p>
           </div>
         </div>
@@ -464,52 +507,50 @@ function FailedJobCard({
         </div>
       </div>
     </div>
-  )
+  );
 }
-
 const LOG_TONES: Record<string, string> = {
-  error: 'border-danger text-danger-light bg-danger/[0.05]',
-  warn: 'border-warning text-warning-light bg-warning/[0.05]',
-  info: 'border-accent/40 text-slate-300',
-  debug: 'border-white/10 text-slate-500'
-}
-
-function JobLogModal({ job, onClose }: { job: Job | null; onClose: () => void }) {
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-
+  error: "border-danger text-danger-light bg-danger/[0.05]",
+  warn: "border-warning text-warning-light bg-warning/[0.05]",
+  info: "border-accent/40 text-slate-300",
+  debug: "border-white/10 text-slate-500",
+};
+function JobLogModal({
+  job,
+  onClose,
+}: {
+  job: Job | null;
+  onClose: () => void;
+}) {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   useEffect(() => {
     if (!job) {
-      setLogs([])
-      return
+      setLogs([]);
+      return;
     }
-
-    let cancelled = false
-    setIsLoading(true)
-
+    let cancelled = false;
+    setIsLoading(true);
     const load = (): void => {
       jobService
         .getLogs(job.id)
         .then((result) => {
-          if (!cancelled) setLogs(result)
+          if (!cancelled) setLogs(result);
         })
         .catch(() => undefined)
         .finally(() => {
-          if (!cancelled) setIsLoading(false)
-        })
-    }
-
-    load()
-
-    // Keep streaming while the job is still moving.
-    const interval = ['queued', 'running'].includes(job.status) ? setInterval(load, 1500) : null
-
+          if (!cancelled) setIsLoading(false);
+        });
+    };
+    load();
+    const interval = ["queued", "running"].includes(job.status)
+      ? setInterval(load, 1500)
+      : null;
     return () => {
-      cancelled = true
-      if (interval) clearInterval(interval)
-    }
-  }, [job])
-
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
+  }, [job]);
   return (
     <Modal
       open={Boolean(job)}
@@ -522,7 +563,7 @@ function JobLogModal({ job, onClose }: { job: Job | null; onClose: () => void })
         </button>
       }
     >
-      {job?.status === 'completed' && (
+      {job?.status === "completed" && (
         <div className="flex items-center gap-2 text-sm text-success-light mb-4">
           <CheckCircle2 className="w-4 h-4" />
           Completed successfully
@@ -530,18 +571,28 @@ function JobLogModal({ job, onClose }: { job: Job | null; onClose: () => void })
       )}
       {job?.error && (
         <div className="rounded-lg border border-danger/30 bg-danger/[0.06] p-3 mb-4">
-          <p className="text-sm text-danger-light break-words selectable">{job.error}</p>
+          <p className="text-sm text-danger-light break-words selectable">
+            {job.error}
+          </p>
         </div>
       )}
 
       {isLoading && logs.length === 0 ? (
         <p className="text-sm text-slate-500 py-8 text-center">Loading log…</p>
       ) : logs.length === 0 ? (
-        <p className="text-sm text-slate-500 py-8 text-center">No log entries for this job</p>
+        <p className="text-sm text-slate-500 py-8 text-center">
+          No log entries for this job
+        </p>
       ) : (
         <div className="space-y-1">
           {logs.map((entry) => (
-            <div key={entry.id} className={cn('log-line', LOG_TONES[entry.level] ?? LOG_TONES.info)}>
+            <div
+              key={entry.id}
+              className={cn(
+                "log-line",
+                LOG_TONES[entry.level] ?? LOG_TONES.info,
+              )}
+            >
               <span className="text-slate-600 mr-2">
                 {new Date(entry.createdAt).toLocaleTimeString()}
               </span>
@@ -551,5 +602,5 @@ function JobLogModal({ job, onClose }: { job: Job | null; onClose: () => void })
         </div>
       )}
     </Modal>
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   ArrowLeft,
@@ -7,97 +7,116 @@ import {
   Code,
   CheckCircle,
   ShieldAlert,
-  AlertTriangle
-} from 'lucide-react'
-import { sourceService } from '@/services'
-import { notify } from '@/stores/appStore'
-import { cn } from '@/lib/utils'
-import type { AdapterRules, AnalysisResult } from '@/types'
-
+  AlertTriangle,
+} from "lucide-react";
+import { sourceService } from "@/services";
+import { notify } from "@/stores/appStore";
+import { cn } from "@/lib/utils";
+import type { AdapterRules, AnalysisResult } from "@/types";
 export function AddSourceWizard() {
-  const [step, setStep] = useState<1 | 2>(1)
-  const [url, setUrl] = useState('')
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
-  const [adapterName, setAdapterName] = useState('')
-  const [linkSelector, setLinkSelector] = useState('')
-  const [buttonSelector, setButtonSelector] = useState('')
-  const [strategy, setStrategy] = useState<AdapterRules['downloadStrategy']>('html')
-  const [isSaving, setIsSaving] = useState(false)
-
-  const navigate = useNavigate()
-
+  const [step, setStep] = useState<1 | 2>(1);
+  const [url, setUrl] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [adapterName, setAdapterName] = useState("");
+  const [linkSelector, setLinkSelector] = useState("");
+  const [buttonSelector, setButtonSelector] = useState("");
+  const [strategy, setStrategy] =
+    useState<AdapterRules["downloadStrategy"]>("html");
+  const [isSaving, setIsSaving] = useState(false);
+  const navigate = useNavigate();
   const analyze = async (): Promise<void> => {
-    const trimmed = url.trim()
-    if (!trimmed) return
-
+    const trimmed = url.trim();
+    if (!trimmed) return;
     if (!/^https?:\/\//i.test(trimmed)) {
-      notify.error('Enter a full URL', 'It must start with http:// or https://')
-      return
+      notify.error(
+        "Enter a full URL",
+        "It must start with http:// or https://",
+      );
+      return;
     }
-
-    setIsAnalyzing(true)
+    setIsAnalyzing(true);
     try {
-      const result = await sourceService.analyze(trimmed)
-      setAnalysis(result)
-      setAdapterName(result.metadata.appName || result.title || result.domain)
-      setLinkSelector(result.suggestedRules.downloadLinkSelector ?? '')
-      setButtonSelector(result.suggestedRules.downloadPageSelector ?? '')
-      setStep(2)
+      const result = await sourceService.analyze(trimmed);
+      setAnalysis(result);
+      setAdapterName(result.metadata.appName || result.title || result.domain);
+      setLinkSelector(result.suggestedRules.downloadLinkSelector ?? "");
+      setButtonSelector(result.suggestedRules.downloadPageSelector ?? "");
+      setStep(2);
     } catch (error) {
-      notify.error('Analysis failed', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Analysis failed",
+        error instanceof Error ? error.message : undefined,
+      );
     } finally {
-      setIsAnalyzing(false)
+      setIsAnalyzing(false);
     }
-  }
-
+  };
   const save = async (): Promise<void> => {
-    if (!analysis) return
-
+    if (!analysis) return;
     if (!linkSelector.trim() && !buttonSelector.trim()) {
-      notify.error('At least one selector is required', 'Fill in a download link or button selector')
-      return
+      notify.error(
+        "At least one selector is required",
+        "Fill in a download link or button selector",
+      );
+      return;
     }
-
-    setIsSaving(true)
+    setIsSaving(true);
     try {
       const rules: AdapterRules = {
         version: 1,
-        parserType: 'html',
+        parserType: "html",
         downloadStrategy: strategy,
         rules: {
-          ...(linkSelector.trim() ? { downloadLinkSelector: linkSelector.trim() } : {}),
-          ...(buttonSelector.trim() ? { downloadPageSelector: buttonSelector.trim() } : {}),
-          appNameSelector: analysis.suggestedRules.appNameSelector || 'h1',
-          fallbackSelectors: analysis.suggestedRules.fallbackSelectors.filter(Boolean)
+          ...(linkSelector.trim()
+            ? { downloadLinkSelector: linkSelector.trim() }
+            : {}),
+          ...(buttonSelector.trim()
+            ? { downloadPageSelector: buttonSelector.trim() }
+            : {}),
+          appNameSelector: analysis.suggestedRules.appNameSelector || "h1",
+          fallbackSelectors:
+            analysis.suggestedRules.fallbackSelectors.filter(Boolean),
         },
-        metadata: { requiresBrowser: strategy === 'browser', maxRedirects: 5, timeout: 30000 }
-      }
-
+        metadata: {
+          requiresBrowser: strategy === "browser",
+          maxRedirects: 5,
+          timeout: 30000,
+        },
+      };
       await sourceService.create({
         name: adapterName.trim() || analysis.domain,
         domain: analysis.domain,
-        rules
-      })
-
-      notify.success('Source adapter created', analysis.domain)
-      navigate('/sources')
+        rules,
+      });
+      notify.success("Source adapter created", analysis.domain);
+      navigate("/sources");
     } catch (error) {
-      notify.error('Could not save adapter', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Could not save adapter",
+        error instanceof Error ? error.message : undefined,
+      );
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
     }
-  }
-
+  };
   return (
     <div className="max-w-3xl mx-auto py-8">
       <div className="flex items-center gap-4 mb-8">
-        <button className="btn-icon" onClick={() => navigate('/sources')} aria-label="Back to sources">
+        <button
+          className="btn-icon"
+          onClick={() => navigate("/sources")}
+          aria-label="Back to sources"
+        >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Add Source Adapter</h1>
-          <p className="text-slate-400">Create a new plugin to support downloads from a website</p>
+          <h1 className="text-2xl font-bold text-slate-100">
+            Add Source Adapter
+          </h1>
+          <p className="text-slate-400">
+            Create a new plugin to support downloads from a website
+          </p>
         </div>
       </div>
 
@@ -109,14 +128,14 @@ export function AddSourceWizard() {
         </div>
         <div
           className={cn(
-            'flex-1 border-t-2 relative transition-colors',
-            step >= 2 ? 'border-accent' : 'border-white/[0.06]'
+            "flex-1 border-t-2 relative transition-colors",
+            step >= 2 ? "border-accent" : "border-white/[0.06]",
           )}
         >
           <div
             className={cn(
-              'absolute -top-3 left-1/2 -translate-x-1/2 bg-surface-500 px-4 font-semibold text-sm transition-colors',
-              step >= 2 ? 'text-accent' : 'text-slate-500'
+              "absolute -top-3 left-1/2 -translate-x-1/2 bg-surface-500 px-4 font-semibold text-sm transition-colors",
+              step >= 2 ? "text-accent" : "text-slate-500",
             )}
           >
             Step 2: Review &amp; Save
@@ -129,10 +148,12 @@ export function AddSourceWizard() {
           <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <Search className="w-8 h-8 text-accent" />
           </div>
-          <h2 className="text-xl font-semibold mb-2 text-slate-100">Scan a download page</h2>
+          <h2 className="text-xl font-semibold mb-2 text-slate-100">
+            Scan a download page
+          </h2>
           <p className="text-slate-400 mb-8 max-w-lg mx-auto">
-            Enter a link to a typical app download page on the website. The engine analyzes it and
-            generates adapter selectors automatically.
+            Enter a link to a typical app download page on the website. The
+            engine analyzes it and generates adapter selectors automatically.
           </p>
 
           <div className="flex gap-4 max-w-xl mx-auto">
@@ -142,7 +163,7 @@ export function AddSourceWizard() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void analyze()
+                if (e.key === "Enter") void analyze();
               }}
               spellCheck={false}
             />
@@ -151,7 +172,7 @@ export function AddSourceWizard() {
               onClick={() => void analyze()}
               disabled={!url.trim() || isAnalyzing}
             >
-              {isAnalyzing ? 'Scanning…' : 'Analyze'}
+              {isAnalyzing ? "Scanning…" : "Analyze"}
               {!isAnalyzing && <ArrowRight className="w-4 h-4" />}
             </button>
           </div>
@@ -162,10 +183,10 @@ export function AddSourceWizard() {
         <div className="animate-fade-in space-y-6">
           <div
             className={cn(
-              'card flex items-start gap-4',
+              "card flex items-start gap-4",
               analysis.confidence >= 50
-                ? 'border-success/30 bg-success/5'
-                : 'border-warning/30 bg-warning/5'
+                ? "border-success/30 bg-success/5"
+                : "border-warning/30 bg-warning/5",
             )}
           >
             {analysis.confidence >= 50 ? (
@@ -176,16 +197,21 @@ export function AddSourceWizard() {
             <div>
               <h3
                 className={cn(
-                  'text-lg font-medium mb-1',
-                  analysis.confidence >= 50 ? 'text-success-light' : 'text-warning-light'
+                  "text-lg font-medium mb-1",
+                  analysis.confidence >= 50
+                    ? "text-success-light"
+                    : "text-warning-light",
                 )}
               >
-                {analysis.confidence >= 50 ? 'Analysis complete' : 'Low confidence'}
+                {analysis.confidence >= 50
+                  ? "Analysis complete"
+                  : "Low confidence"}
               </h3>
               <p className="text-slate-300 text-sm">
-                Found {analysis.detectedLinks.length} candidate link(s) and{' '}
-                {analysis.detectedButtons.length} button(s) on {analysis.domain} -{' '}
-                {analysis.confidence}% confidence. Review the selectors below before saving.
+                Found {analysis.detectedLinks.length} candidate link(s) and{" "}
+                {analysis.detectedButtons.length} button(s) on {analysis.domain}{" "}
+                - {analysis.confidence}% confidence. Review the selectors below
+                before saving.
               </p>
             </div>
           </div>
@@ -208,19 +234,31 @@ export function AddSourceWizard() {
                 </div>
                 <div>
                   <label className="label">Domain</label>
-                  <input className="input font-mono text-xs" value={analysis.domain} disabled />
+                  <input
+                    className="input font-mono text-xs"
+                    value={analysis.domain}
+                    disabled
+                  />
                 </div>
                 <div>
                   <label className="label">Download strategy</label>
                   <select
                     className="input"
                     value={strategy}
-                    onChange={(e) => setStrategy(e.target.value as AdapterRules['downloadStrategy'])}
+                    onChange={(e) =>
+                      setStrategy(
+                        e.target.value as AdapterRules["downloadStrategy"],
+                      )
+                    }
                   >
                     <option value="html">HTML - parse the page</option>
                     <option value="direct">Direct - URL is the file</option>
-                    <option value="redirect">Redirect - follow redirects</option>
-                    <option value="browser">Browser - render with headless browser</option>
+                    <option value="redirect">
+                      Redirect - follow redirects
+                    </option>
+                    <option value="browser">
+                      Browser - render with headless browser
+                    </option>
                   </select>
                 </div>
               </div>
@@ -234,7 +272,9 @@ export function AddSourceWizard() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="label text-xs">Download link (primary)</label>
+                  <label className="label text-xs">
+                    Download link (primary)
+                  </label>
                   <input
                     className="input-sm"
                     value={linkSelector}
@@ -244,7 +284,9 @@ export function AddSourceWizard() {
                   />
                 </div>
                 <div>
-                  <label className="label text-xs">Download button (fallback)</label>
+                  <label className="label text-xs">
+                    Download button (fallback)
+                  </label>
                   <input
                     className="input-sm"
                     value={buttonSelector}
@@ -256,17 +298,20 @@ export function AddSourceWizard() {
                 {analysis.suggestedRules.fallbackSelectors.length > 0 && (
                   <div>
                     <span className="text-slate-500 block text-xs mb-1.5">
-                      Extra fallbacks ({analysis.suggestedRules.fallbackSelectors.length})
+                      Extra fallbacks (
+                      {analysis.suggestedRules.fallbackSelectors.length})
                     </span>
                     <div className="space-y-1">
-                      {analysis.suggestedRules.fallbackSelectors.slice(0, 4).map((selector) => (
-                        <code
-                          key={selector}
-                          className="block bg-surface-600 px-2 py-1 rounded text-accent text-xs truncate"
-                        >
-                          {selector}
-                        </code>
-                      ))}
+                      {analysis.suggestedRules.fallbackSelectors
+                        .slice(0, 4)
+                        .map((selector) => (
+                          <code
+                            key={selector}
+                            className="block bg-surface-600 px-2 py-1 rounded text-accent text-xs truncate"
+                          >
+                            {selector}
+                          </code>
+                        ))}
                     </div>
                   </div>
                 )}
@@ -276,12 +321,22 @@ export function AddSourceWizard() {
 
           {analysis.detectedLinks.length > 0 && (
             <div className="card">
-              <h3 className="font-medium text-slate-200 mb-3">Top candidate links</h3>
+              <h3 className="font-medium text-slate-200 mb-3">
+                Top candidate links
+              </h3>
               <ul className="space-y-2">
                 {analysis.detectedLinks.slice(0, 5).map((link) => (
-                  <li key={link.url} className="flex items-center gap-3 text-xs">
-                    <span className="badge-neutral shrink-0">{link.confidence}</span>
-                    <code className="text-slate-400 truncate flex-1" title={link.url}>
+                  <li
+                    key={link.url}
+                    className="flex items-center gap-3 text-xs"
+                  >
+                    <span className="badge-neutral shrink-0">
+                      {link.confidence}
+                    </span>
+                    <code
+                      className="text-slate-400 truncate flex-1"
+                      title={link.url}
+                    >
                       {link.url}
                     </code>
                     <button
@@ -297,16 +352,24 @@ export function AddSourceWizard() {
           )}
 
           <div className="flex justify-between items-center pt-6 border-t border-white/[0.06]">
-            <button className="btn-ghost" onClick={() => setStep(1)} disabled={isSaving}>
+            <button
+              className="btn-ghost"
+              onClick={() => setStep(1)}
+              disabled={isSaving}
+            >
               <ArrowLeft className="w-4 h-4" />
               Back
             </button>
-            <button className="btn-primary" onClick={() => void save()} disabled={isSaving}>
-              {isSaving ? 'Saving…' : 'Save & Enable Adapter'}
+            <button
+              className="btn-primary"
+              onClick={() => void save()}
+              disabled={isSaving}
+            >
+              {isSaving ? "Saving…" : "Save & Enable Adapter"}
             </button>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }

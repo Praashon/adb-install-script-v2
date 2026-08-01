@@ -1,77 +1,78 @@
-import { eq, desc } from 'drizzle-orm'
-import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import { v4 as uuid } from 'uuid'
-import * as schema from '../schema'
-import { Download } from '../schema'
-
+import { eq, desc } from "drizzle-orm";
+import { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { v4 as uuid } from "uuid";
+import * as schema from "../schema";
+import { Download } from "../schema";
 export class DownloadRepository {
   constructor(private db: BetterSQLite3Database<typeof schema>) {}
-
   findAll(): Download[] {
-    return this.db.select().from(schema.downloads).orderBy(desc(schema.downloads.createdAt)).all()
+    return this.db
+      .select()
+      .from(schema.downloads)
+      .orderBy(desc(schema.downloads.createdAt))
+      .all();
   }
-
   findById(id: string): Download | undefined {
-    return this.db.select().from(schema.downloads).where(eq(schema.downloads.id, id)).get()
+    return this.db
+      .select()
+      .from(schema.downloads)
+      .where(eq(schema.downloads.id, id))
+      .get();
   }
-
   findByJobId(jobId: string): Download | undefined {
     return this.db
       .select()
       .from(schema.downloads)
       .where(eq(schema.downloads.jobId, jobId))
-      .get()
+      .get();
   }
-
   findBySha256(sha256: string): Download | undefined {
     return this.db
       .select()
       .from(schema.downloads)
       .where(eq(schema.downloads.sha256, sha256))
-      .get()
+      .get();
   }
-
   create(data: {
-    jobId?: string
-    sourceId?: string
-    url: string
-    filename: string
-    filePath?: string
-    fileSize?: number
-    packageType?: 'apk' | 'xapk' | 'apks' | 'split_bundle'
+    jobId?: string;
+    sourceId?: string;
+    url: string;
+    filename: string;
+    filePath?: string;
+    fileSize?: number;
+    packageType?: "apk" | "xapk" | "apks" | "split_bundle";
   }): string {
-    const id = uuid()
-
-    this.db.insert(schema.downloads).values({
-      id,
-      jobId: data.jobId ?? null,
-      sourceId: data.sourceId ?? null,
-      url: data.url,
-      filename: data.filename,
-      filePath: data.filePath ?? null,
-      fileSize: data.fileSize ?? null,
-      packageType: data.packageType ?? null,
-      status: 'downloading',
-      createdAt: new Date()
-    }).run()
-
-    return id
+    const id = uuid();
+    this.db
+      .insert(schema.downloads)
+      .values({
+        id,
+        jobId: data.jobId ?? null,
+        sourceId: data.sourceId ?? null,
+        url: data.url,
+        filename: data.filename,
+        filePath: data.filePath ?? null,
+        fileSize: data.fileSize ?? null,
+        packageType: data.packageType ?? null,
+        status: "downloading",
+        createdAt: new Date(),
+      })
+      .run();
+    return id;
   }
-
   updateFile(
     id: string,
     data: {
-      filePath: string
-      fileSize: number
-      sha256?: string
-      mimeType?: string
-      packageName?: string
-      versionName?: string
-      packageType?: 'apk' | 'xapk' | 'apks' | 'split_bundle'
-    }
+      filePath: string;
+      fileSize: number;
+      sha256?: string;
+      mimeType?: string;
+      packageName?: string;
+      versionName?: string;
+      packageType?: "apk" | "xapk" | "apks" | "split_bundle";
+    },
   ): void {
-    const existing = this.findById(id)
-
+    const existing = this.findById(id);
     this.db
       .update(schema.downloads)
       .set({
@@ -82,46 +83,44 @@ export class DownloadRepository {
         packageName: data.packageName ?? existing?.packageName ?? null,
         versionName: data.versionName ?? existing?.versionName ?? null,
         packageType: data.packageType ?? existing?.packageType ?? null,
-        status: 'completed'
+        status: "completed",
       })
       .where(eq(schema.downloads.id, id))
-      .run()
+      .run();
   }
-
   updateMetadata(
     id: string,
-    data: { packageName?: string; versionName?: string }
+    data: {
+      packageName?: string;
+      versionName?: string;
+    },
   ): void {
-    const existing = this.findById(id)
-    if (!existing) return
-
+    const existing = this.findById(id);
+    if (!existing) return;
     this.db
       .update(schema.downloads)
       .set({
         packageName: data.packageName ?? existing.packageName,
-        versionName: data.versionName ?? existing.versionName
+        versionName: data.versionName ?? existing.versionName,
       })
       .where(eq(schema.downloads.id, id))
-      .run()
+      .run();
   }
-
   setFailed(id: string): void {
     this.db
       .update(schema.downloads)
-      .set({ status: 'failed' })
+      .set({ status: "failed" })
       .where(eq(schema.downloads.id, id))
-      .run()
+      .run();
   }
-
   markDeleted(id: string): void {
     this.db
       .update(schema.downloads)
-      .set({ status: 'deleted', filePath: null })
+      .set({ status: "deleted", filePath: null })
       .where(eq(schema.downloads.id, id))
-      .run()
+      .run();
   }
-
   remove(id: string): void {
-    this.db.delete(schema.downloads).where(eq(schema.downloads.id, id)).run()
+    this.db.delete(schema.downloads).where(eq(schema.downloads.id, id)).run();
   }
 }

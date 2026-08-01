@@ -1,170 +1,157 @@
-import { Parser } from '@source-engine/parser'
-import { SandboxedAdapter } from '@security-engine/sandbox'
-import { ResolvedDownload } from '../resolver'
-import { EventBus } from '@core/event-bus/eventBus'
-
+import { Parser } from "@source-engine/parser";
+import { SandboxedAdapter } from "@security-engine/sandbox";
+import { ResolvedDownload } from "../resolver";
+import { EventBus } from "@core/event-bus/eventBus";
 export class DirectDownloadStrategy {
   async resolve(url: string): Promise<ResolvedDownload> {
-    return { url, filename: this.extractFilename(url), strategy: 'direct' }
+    return { url, filename: this.extractFilename(url), strategy: "direct" };
   }
-
   private extractFilename(url: string): string {
     try {
-      const last = new URL(url).pathname.split('/').pop()
-      if (last && last.includes('.')) return decodeURIComponent(last)
+      const last = new URL(url).pathname.split("/").pop();
+      if (last && last.includes(".")) return decodeURIComponent(last);
     } catch {}
-    return 'download.apk'
+    return "download.apk";
   }
 }
-
 export class HTMLDownloadStrategy {
-  constructor(private parser: Parser, private eventBus: EventBus) {}
-
-  async resolve(url: string, adapter: SandboxedAdapter): Promise<ResolvedDownload | null> {
+  constructor(
+    private parser: Parser,
+    private eventBus: EventBus,
+  ) {}
+  async resolve(
+    url: string,
+    adapter: SandboxedAdapter,
+  ): Promise<ResolvedDownload | null> {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        ...adapter.getAllHeaders()
-      }
-    })
-
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        ...adapter.getAllHeaders(),
+      },
+    });
     if (!response.ok) {
-      throw new Error(`Failed to fetch page: HTTP ${response.status}`)
+      throw new Error(`Failed to fetch page: HTTP ${response.status}`);
     }
-
-    const html = await response.text()
-    const result = await this.parser.parseDownloadPage(html, url, adapter)
-
+    const html = await response.text();
+    const result = await this.parser.parseDownloadPage(html, url, adapter);
     if (!result) {
-      this.eventBus.download('warn', 'HTML strategy found no download link', { url })
-      return null
+      this.eventBus.download("warn", "HTML strategy found no download link", {
+        url,
+      });
+      return null;
     }
-
-    this.eventBus.download('info', 'HTML strategy resolved download', {
+    this.eventBus.download("info", "HTML strategy resolved download", {
       downloadUrl: result.downloadUrl,
-      filename: result.filename
-    })
-
+      filename: result.filename,
+    });
     return {
       url: result.downloadUrl,
       filename: result.filename,
-      strategy: 'html',
-      headers: adapter.getAllHeaders()
-    }
+      strategy: "html",
+      headers: adapter.getAllHeaders(),
+    };
   }
 }
-
 export class RedirectDownloadStrategy {
   constructor(private eventBus: EventBus) {}
-
-  async resolve(url: string, maxRedirects: number = 5): Promise<ResolvedDownload> {
-    let currentUrl = url
-    let redirectCount = 0
-
+  async resolve(
+    url: string,
+    maxRedirects: number = 5,
+  ): Promise<ResolvedDownload> {
+    let currentUrl = url;
+    let redirectCount = 0;
     while (redirectCount < maxRedirects) {
       const response = await fetch(currentUrl, {
-        method: 'HEAD',
-        redirect: 'manual',
+        method: "HEAD",
+        redirect: "manual",
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      })
-
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+      });
       if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location')
-        if (!location) break
-
-        currentUrl = new URL(location, currentUrl).toString()
-        redirectCount++
-
-        this.eventBus.download('info', `Redirect ${redirectCount}: ${currentUrl}`)
-        continue
+        const location = response.headers.get("location");
+        if (!location) break;
+        currentUrl = new URL(location, currentUrl).toString();
+        redirectCount++;
+        this.eventBus.download(
+          "info",
+          `Redirect ${redirectCount}: ${currentUrl}`,
+        );
+        continue;
       }
-
-      break
+      break;
     }
-
-    const filename = this.extractFilename(currentUrl)
-
+    const filename = this.extractFilename(currentUrl);
     return {
       url: currentUrl,
       filename,
-      strategy: 'redirect'
-    }
+      strategy: "redirect",
+    };
   }
-
   private extractFilename(url: string): string {
     try {
-      const last = new URL(url).pathname.split('/').pop()
-      if (last && last.includes('.')) return decodeURIComponent(last)
+      const last = new URL(url).pathname.split("/").pop();
+      if (last && last.includes(".")) return decodeURIComponent(last);
     } catch {}
-    return 'download.apk'
+    return "download.apk";
   }
 }
-
 export interface BrowserStrategyOptions {
-  /** Show the browser window so the user can clear a verification check. */
-  headed?: boolean
+  headed?: boolean;
 }
-
 export class BrowserDownloadStrategy {
   constructor(private eventBus: EventBus) {}
-
   async resolve(
     url: string,
     adapter?: SandboxedAdapter,
-    options: BrowserStrategyOptions = {}
+    options: BrowserStrategyOptions = {},
   ): Promise<ResolvedDownload | null> {
-    const { NetworkInterceptor } = await import('@browser-engine/networkInterceptor')
-    const { BrowserManager } = await import('@browser-engine/browserManager')
-
-    const browserManager = new BrowserManager({ headed: options.headed })
-
+    const { NetworkInterceptor } =
+      await import("@browser-engine/networkInterceptor");
+    const { BrowserManager } = await import("@browser-engine/browserManager");
+    const browserManager = new BrowserManager({ headed: options.headed });
     try {
-      const interceptor = new NetworkInterceptor(browserManager)
-
+      const interceptor = new NetworkInterceptor(browserManager);
       const clickSelector =
-        adapter?.getSelector('downloadLinkSelector') || adapter?.getSelector('downloadPageSelector')
-
+        adapter?.getSelector("downloadLinkSelector") ||
+        adapter?.getSelector("downloadPageSelector");
       const result = await interceptor.captureDownloadUrl(url, {
         clickSelector: clickSelector || undefined,
         waitTimeout: adapter?.getTimeout() ?? 30000,
-        // In a visible window the user needs real time to click through.
-        challengeTimeout: options.headed ? 120000 : 12000
-      })
-
+        challengeTimeout: options.headed ? 120000 : 12000,
+      });
       if (!result) {
-        this.eventBus.download('warn', 'Browser strategy found no download', { url })
-        return null
+        this.eventBus.download("warn", "Browser strategy found no download", {
+          url,
+        });
+        return null;
       }
-
-      this.eventBus.download('info', 'Browser strategy captured download', {
-        downloadUrl: result.url
-      })
-
+      this.eventBus.download("info", "Browser strategy captured download", {
+        downloadUrl: result.url,
+      });
       return {
         url: result.url,
-        filename: result.filename || 'download.apk',
-        strategy: 'browser',
-        headers: result.headers
-      }
+        filename: result.filename || "download.apk",
+        strategy: "browser",
+        headers: result.headers,
+      };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      this.eventBus.download('error', `Browser strategy failed: ${message}`)
-
-      // Setup problems and verification prompts are things the user can act on,
-      // so surface them instead of reporting a generic "no link found".
+      const message = error instanceof Error ? error.message : "Unknown error";
+      this.eventBus.download("error", `Browser strategy failed: ${message}`);
       if (
         error instanceof Error &&
-        (error.name === 'HumanVerificationRequiredError' ||
-          /No Chrome, Edge, or Brave|executable doesn't exist|Failed to launch/i.test(message))
+        (error.name === "HumanVerificationRequiredError" ||
+          /No Chrome, Edge, or Brave|executable doesn't exist|Failed to launch/i.test(
+            message,
+          ))
       ) {
-        throw error
+        throw error;
       }
-
-      return null
+      return null;
     } finally {
-      await browserManager.close().catch(() => undefined)
+      await browserManager.close().catch(() => undefined);
     }
   }
 }
