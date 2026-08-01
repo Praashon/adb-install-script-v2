@@ -1,63 +1,63 @@
 # ADB APK Installer Pro
 
 ## Overview
-ADB APK Installer Pro is an intelligent desktop application designed to streamline the process of managing, downloading, and installing Android packages directly to your connected devices. Built with modern web technologies and wrapped in a secure Electron environment, it provides a seamless bridge between web-based APK sources and local hardware.
+ADB APK Installer Pro is a simple desktop app for Windows. It helps you manage, download, and install Android apps to your connected devices. It connects your computer to online APK sources and lets you install apps quickly using ADB.
 
-## Key Purpose
-The core mission of this platform is to remove the friction from side-loading Android applications. By integrating source tracking, background downloading, and automated ADB commands into a single cohesive interface, developers and enthusiasts can significantly speed up their testing and deployment workflows.
+## Why Use This App?
+The main goal of this app is to make installing Android apps easy. Instead of doing things by hand, you can track sources, download files in the background, and use ADB commands all from one clean dashboard. This saves a lot of time for testing and setting up devices.
 
 ## Features
-* Automated ADB Device Detection: Instantly connect to and monitor available Android devices or emulators.
-* Integrated Download Manager: Queue, track, and resume multiple APK downloads simultaneously.
-* Source Management Engine: Easily plug into various APK repositories and maintain a personalized library.
-* Secure Sandboxed Environment: Ensure all external web interactions remain isolated and safe.
-* Modern Desktop Interface: Navigate a vibrant, intuitive dashboard built for speed and clarity.
+* Auto Detect Devices: The app finds your connected Android devices or emulators right away.
+* Easy Downloads: You can queue, track, and resume multiple APK downloads at the same time.
+* Manage Sources: Add your favorite online APK links or repositories to keep a personal library.
+* Safe Browsing: All online links are kept separate so your computer stays safe.
+* Clean Design: The dashboard is built to be fast, clear, and very easy to look at.
 
 ## Installation
 
-### Prerequisites
-1. Node.js (Version 20.0.0 or higher recommended)
+### What You Need First
+1. Node.js (Version 20.0.0 or higher is best)
 2. Git
-3. An Android device with USB Debugging enabled (or an active emulator)
+3. An Android device with USB Debugging turned on (or an active emulator)
 4. ADB installed and added to your system PATH
 
-### Setup Guide
-Open your terminal and execute the following commands:
+### Setup Steps
+Open your terminal and run these commands:
 
-1. Clone the repository:
+1. Clone the project:
    ```bash
    git clone https://github.com/Praashon/adb-install-script.git
    ```
 
-2. Navigate into the project directory:
+2. Open the project folder:
    ```bash
    cd adb-install-script
    ```
 
-3. Install the required project dependencies:
+3. Install the required files:
    ```bash
    npm install
    ```
 
-4. Launch the application in development mode:
+4. Start the app in development mode:
    ```bash
    npm run dev
    ```
 
-5. (Optional) Build and package the application for production:
+5. (Optional) Build the app for normal use:
    ```bash
    npm run build
    npm run package
    ```
 
-## Usage Instructions
+## How to Use It
 
-1. Connect Your Device: Plug your Android device into your computer and ensure USB Debugging is authorized. The application will automatically detect and display your device in the dashboard.
-2. Add a Source: Navigate to the Sources section to configure your preferred APK repositories or direct links. 
-3. Download an Application: Browse your configured sources and select an APK to download. The integrated download engine will handle the file transfer and verification.
-4. Install via ADB: Once the download is complete, click the install button next to the package. The application will push the APK and install it to your selected device automatically.
+1. Connect Your Device: Plug your Android device into your computer. Make sure USB Debugging is allowed. The app will find your device and show it on the dashboard.
+2. Add a Source: Go to the Sources section. Here you can add your favorite APK links.
+3. Download an App: Look through your sources and pick an APK to download. The app will handle the file transfer for you.
+4. Install with ADB: When the download is done, click the install button next to the file. The app will push the APK to your device and install it automatically.
 
-## Technologies Used
+## Built With
 * Electron
 * React
 * TypeScript
