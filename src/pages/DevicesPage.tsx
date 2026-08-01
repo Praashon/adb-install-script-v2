@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from "react";
 import {
   Smartphone,
   RefreshCw,
@@ -12,74 +12,94 @@ import {
   AlertTriangle,
   BatteryMedium,
   HardDrive,
-  Cpu
-} from 'lucide-react'
-import { deviceService } from '@/services'
-import { useAppStore, notify } from '@/stores/appStore'
-import { Modal, ConfirmDialog } from '@/components/Modal'
-import { cn, formatDate } from '@/lib/utils'
-import type { Device, InstalledPackage } from '@/types'
-
+  Cpu,
+} from "lucide-react";
+import { deviceService } from "@/services";
+import { useAppStore, notify } from "@/stores/appStore";
+import { Modal, ConfirmDialog } from "@/components/Modal";
+import { cn, formatDate } from "@/lib/utils";
+import type { Device, InstalledPackage } from "@/types";
 export function DevicesPage() {
-  const devices = useAppStore((s) => s.devices)
-  const setDevices = useAppStore((s) => s.setDevices)
-  const adbAvailable = useAppStore((s) => s.adbAvailable)
-  const adbError = useAppStore((s) => s.adbError)
-
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [detailDevice, setDetailDevice] = useState<Device | null>(null)
-  const [appsDevice, setAppsDevice] = useState<Device | null>(null)
-  const [showConnect, setShowConnect] = useState(false)
-
+  const devices = useAppStore((s) => s.devices);
+  const setDevices = useAppStore((s) => s.setDevices);
+  const adbAvailable = useAppStore((s) => s.adbAvailable);
+  const adbError = useAppStore((s) => s.adbError);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [detailDevice, setDetailDevice] = useState<Device | null>(null);
+  const [appsDevice, setAppsDevice] = useState<Device | null>(null);
+  const [showConnect, setShowConnect] = useState(false);
   const refresh = async (): Promise<void> => {
-    setIsRefreshing(true)
+    setIsRefreshing(true);
     try {
-      const data = await deviceService.refresh()
-      setDevices(data)
-      if (data.length === 0) notify.info('No devices found', 'Check the USB cable and debugging prompt')
+      const data = await deviceService.refresh();
+      setDevices(data);
+      if (data.length === 0)
+        notify.info(
+          "No devices found",
+          "Check the USB cable and debugging prompt",
+        );
     } catch (error) {
-      notify.error('Device scan failed', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Device scan failed",
+        error instanceof Error ? error.message : undefined,
+      );
     } finally {
-      setIsRefreshing(false)
+      setIsRefreshing(false);
     }
-  }
-
+  };
   const setPreferred = async (serial: string): Promise<void> => {
     try {
-      await deviceService.setPreferred(serial)
-      setDevices(devices.map((d) => ({ ...d, isPreferred: d.serial === serial })))
-      notify.success('Preferred device updated')
+      await deviceService.setPreferred(serial);
+      setDevices(
+        devices.map((d) => ({ ...d, isPreferred: d.serial === serial })),
+      );
+      notify.success("Preferred device updated");
     } catch (error) {
-      notify.error('Could not set preferred device', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Could not set preferred device",
+        error instanceof Error ? error.message : undefined,
+      );
     }
-  }
-
+  };
   const openDetails = async (device: Device): Promise<void> => {
-    setDetailDevice(device)
+    setDetailDevice(device);
     try {
-      const info = await deviceService.getInfo(device.serial)
-      setDetailDevice({ ...device, ...info })
+      const info = await deviceService.getInfo(device.serial);
+      setDetailDevice({ ...device, ...info });
     } catch (error) {
-      notify.error('Could not read device info', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Could not read device info",
+        error instanceof Error ? error.message : undefined,
+      );
     }
-  }
-
+  };
   return (
     <div className="max-w-5xl mx-auto py-6">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 mb-1">Connected Devices</h1>
+          <h1 className="text-2xl font-bold text-slate-100 mb-1">
+            Connected Devices
+          </h1>
           <p className="text-slate-400">
             Detected automatically - installs go to the starred device
           </p>
         </div>
         <div className="flex gap-3">
-          <button className="btn-secondary" onClick={() => setShowConnect(true)}>
+          <button
+            className="btn-secondary"
+            onClick={() => setShowConnect(true)}
+          >
             <Wifi className="w-4 h-4" />
             Connect over Wi-Fi
           </button>
-          <button className="btn-secondary" onClick={() => void refresh()} disabled={isRefreshing}>
-            <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
+          <button
+            className="btn-secondary"
+            onClick={() => void refresh()}
+            disabled={isRefreshing}
+          >
+            <RefreshCw
+              className={cn("w-4 h-4", isRefreshing && "animate-spin")}
+            />
             Refresh
           </button>
         </div>
@@ -89,9 +109,12 @@ export function DevicesPage() {
         <div className="card border-danger/30 bg-danger/[0.06] flex items-start gap-3 mb-6">
           <AlertTriangle className="w-5 h-5 text-danger-light mt-0.5 shrink-0" />
           <div>
-            <h3 className="text-sm font-medium text-danger-light mb-1">ADB is not available</h3>
+            <h3 className="text-sm font-medium text-danger-light mb-1">
+              ADB is not available
+            </h3>
             <p className="text-sm text-slate-400">
-              {adbError ?? 'Install Android platform-tools, or set a custom ADB path in Settings.'}
+              {adbError ??
+                "Install Android platform-tools, or set a custom ADB path in Settings."}
             </p>
           </div>
         </div>
@@ -112,54 +135,66 @@ export function DevicesPage() {
         {devices.length === 0 && adbAvailable && (
           <div className="col-span-full py-16 text-center card border-dashed">
             <Usb className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <h3 className="text-xl font-medium text-slate-300 mb-2">No Devices Connected</h3>
+            <h3 className="text-xl font-medium text-slate-300 mb-2">
+              No Devices Connected
+            </h3>
             <p className="text-slate-500 max-w-md mx-auto mb-6">
-              Connect an Android device via USB and enable USB Debugging in Developer Options. New
-              devices appear here within a few seconds.
+              Connect an Android device via USB and enable USB Debugging in
+              Developer Options. New devices appear here within a few seconds.
             </p>
-            <button className="btn-primary" onClick={() => void refresh()} disabled={isRefreshing}>
-              <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
+            <button
+              className="btn-primary"
+              onClick={() => void refresh()}
+              disabled={isRefreshing}
+            >
+              <RefreshCw
+                className={cn("w-4 h-4", isRefreshing && "animate-spin")}
+              />
               Scan again
             </button>
           </div>
         )}
       </div>
 
-      <DeviceDetailsModal device={detailDevice} onClose={() => setDetailDevice(null)} />
-      <InstalledAppsModal device={appsDevice} onClose={() => setAppsDevice(null)} />
+      <DeviceDetailsModal
+        device={detailDevice}
+        onClose={() => setDetailDevice(null)}
+      />
+      <InstalledAppsModal
+        device={appsDevice}
+        onClose={() => setAppsDevice(null)}
+      />
       <WifiConnectModal
         open={showConnect}
         onClose={() => setShowConnect(false)}
         onConnected={(data) => {
-          setDevices(data)
-          setShowConnect(false)
+          setDevices(data);
+          setShowConnect(false);
         }}
       />
     </div>
-  )
+  );
 }
-
 function DeviceCard({
   device,
   index,
   onSetPreferred,
   onDetails,
-  onApps
+  onApps,
 }: {
-  device: Device
-  index: number
-  onSetPreferred: () => void
-  onDetails: () => void
-  onApps: () => void
+  device: Device;
+  index: number;
+  onSetPreferred: () => void;
+  onDetails: () => void;
+  onApps: () => void;
 }) {
-  const isOnline = device.status === 'online'
-  const isUnauthorized = device.status === 'unauthorized'
-
+  const isOnline = device.status === "online";
+  const isUnauthorized = device.status === "unauthorized";
   return (
     <div
       className={cn(
-        'card relative overflow-hidden transition-all duration-300 animate-slide-up',
-        device.isPreferred && isOnline && 'border-accent/50 shadow-glow'
+        "card relative overflow-hidden transition-all duration-300 animate-slide-up",
+        device.isPreferred && isOnline && "border-accent/50 shadow-glow",
       )}
       style={{ animationDelay: `${index * 0.08}s` }}
     >
@@ -171,29 +206,29 @@ function DeviceCard({
         <div className="flex items-center gap-4 min-w-0">
           <div
             className={cn(
-              'w-12 h-12 rounded-xl flex items-center justify-center shrink-0',
+              "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
               isOnline
-                ? 'bg-success/10 text-success-light'
+                ? "bg-success/10 text-success-light"
                 : isUnauthorized
-                  ? 'bg-warning/10 text-warning-light'
-                  : 'bg-slate-500/10 text-slate-400'
+                  ? "bg-warning/10 text-warning-light"
+                  : "bg-slate-500/10 text-slate-400",
             )}
           >
             <Smartphone className="w-6 h-6" />
           </div>
           <div className="min-w-0">
             <h3 className="font-semibold text-lg text-slate-200 truncate">
-              {device.model || 'Unknown Device'}
+              {device.model || "Unknown Device"}
             </h3>
             <div className="flex items-center gap-2 mt-1">
               <span
                 className={cn(
-                  'w-2 h-2 rounded-full shrink-0',
+                  "w-2 h-2 rounded-full shrink-0",
                   isOnline
-                    ? 'bg-success shadow-glow-success'
+                    ? "bg-success shadow-glow-success"
                     : isUnauthorized
-                      ? 'bg-warning'
-                      : 'bg-slate-500'
+                      ? "bg-warning"
+                      : "bg-slate-500",
                 )}
               />
               <span className="text-xs text-slate-400 font-mono truncate selectable">
@@ -207,15 +242,20 @@ function DeviceCard({
           onClick={onSetPreferred}
           disabled={!isOnline}
           className={cn(
-            'btn-icon rounded-full shrink-0',
+            "btn-icon rounded-full shrink-0",
             device.isPreferred && isOnline
-              ? 'text-accent bg-accent/10 hover:bg-accent/20'
-              : 'hover:text-accent',
-            !isOnline && 'opacity-40 cursor-not-allowed'
+              ? "text-accent bg-accent/10 hover:bg-accent/20"
+              : "hover:text-accent",
+            !isOnline && "opacity-40 cursor-not-allowed",
           )}
-          title={device.isPreferred ? 'Preferred device' : 'Set as preferred'}
+          title={device.isPreferred ? "Preferred device" : "Set as preferred"}
         >
-          <Star className={cn('w-5 h-5', device.isPreferred && isOnline && 'fill-current')} />
+          <Star
+            className={cn(
+              "w-5 h-5",
+              device.isPreferred && isOnline && "fill-current",
+            )}
+          />
         </button>
       </div>
 
@@ -226,53 +266,76 @@ function DeviceCard({
       )}
 
       <div className="bg-surface-400/50 rounded-lg p-4 grid grid-cols-2 gap-4 text-sm mb-4 border border-white/[0.04]">
-        <Field label="Android" value={device.androidVersion || 'Unknown'} />
-        <Field label="Architecture" value={device.architecture || 'Unknown'} mono />
+        <Field label="Android" value={device.androidVersion || "Unknown"} />
+        <Field
+          label="Architecture"
+          value={device.architecture || "Unknown"}
+          mono
+        />
         <Field
           label="Manufacturer"
-          value={device.manufacturer || 'Unknown'}
+          value={device.manufacturer || "Unknown"}
           className="col-span-2"
         />
       </div>
 
       <div className="flex gap-2">
-        <button className="btn-secondary flex-1 py-2 text-xs" disabled={!isOnline} onClick={onDetails}>
+        <button
+          className="btn-secondary flex-1 py-2 text-xs"
+          disabled={!isOnline}
+          onClick={onDetails}
+        >
           <Info className="w-4 h-4" />
           Details
         </button>
-        <button className="btn-secondary flex-1 py-2 text-xs" disabled={!isOnline} onClick={onApps}>
+        <button
+          className="btn-secondary flex-1 py-2 text-xs"
+          disabled={!isOnline}
+          onClick={onApps}
+        >
           <Package className="w-4 h-4" />
           Installed Apps
         </button>
       </div>
     </div>
-  )
+  );
 }
-
 function Field({
   label,
   value,
   mono = false,
-  className
+  className,
 }: {
-  label: string
-  value: string
-  mono?: boolean
-  className?: string
+  label: string;
+  value: string;
+  mono?: boolean;
+  className?: string;
 }) {
   return (
     <div className={className}>
       <span className="text-slate-500 block text-xs mb-1">{label}</span>
-      <span className={cn('text-slate-200 font-medium', mono && 'font-mono text-xs')}>{value}</span>
+      <span
+        className={cn(
+          "text-slate-200 font-medium",
+          mono && "font-mono text-xs",
+        )}
+      >
+        {value}
+      </span>
     </div>
-  )
+  );
 }
-
-function DeviceDetailsModal({ device, onClose }: { device: Device | null; onClose: () => void }) {
+function DeviceDetailsModal({
+  device,
+  onClose,
+}: {
+  device: Device | null;
+  onClose: () => void;
+}) {
   return (
     <Modal
       open={Boolean(device)}
-      title={device?.model || 'Device details'}
+      title={device?.model || "Device details"}
       description={device?.serial}
       onClose={onClose}
       size="sm"
@@ -280,180 +343,223 @@ function DeviceDetailsModal({ device, onClose }: { device: Device | null; onClos
       {device && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <DetailStat icon={Cpu} label="Architecture" value={device.architecture || 'Unknown'} />
+            <DetailStat
+              icon={Cpu}
+              label="Architecture"
+              value={device.architecture || "Unknown"}
+            />
             <DetailStat
               icon={Smartphone}
               label="Android"
               value={
                 device.androidVersion
-                  ? `${device.androidVersion}${device.sdkVersion ? ` (API ${device.sdkVersion})` : ''}`
-                  : 'Unknown'
+                  ? `${device.androidVersion}${device.sdkVersion ? ` (API ${device.sdkVersion})` : ""}`
+                  : "Unknown"
               }
             />
             <DetailStat
               icon={BatteryMedium}
               label="Battery"
-              value={device.batteryLevel !== undefined ? `${device.batteryLevel}%` : 'Unknown'}
+              value={
+                device.batteryLevel !== undefined
+                  ? `${device.batteryLevel}%`
+                  : "Unknown"
+              }
             />
             <DetailStat
               icon={HardDrive}
               label="Free storage"
-              value={device.storageFree ?? 'Unknown'}
+              value={device.storageFree ?? "Unknown"}
             />
           </div>
 
           <div className="divider" />
 
           <dl className="space-y-3 text-sm">
-            <Row label="Manufacturer" value={device.manufacturer || 'Unknown'} />
+            <Row
+              label="Manufacturer"
+              value={device.manufacturer || "Unknown"}
+            />
             <Row label="Serial" value={device.serial} mono />
-            <Row label="Connection" value={device.isEmulator ? 'Emulator' : 'USB / network'} />
+            <Row
+              label="Connection"
+              value={device.isEmulator ? "Emulator" : "USB / network"}
+            />
             <Row label="Status" value={device.status} />
           </dl>
         </div>
       )}
     </Modal>
-  )
+  );
 }
-
 function DetailStat({
   icon: Icon,
   label,
-  value
+  value,
 }: {
-  icon: typeof Cpu
-  label: string
-  value: string
+  icon: typeof Cpu;
+  label: string;
+  value: string;
 }) {
   return (
     <div className="stat-tile">
       <div className="flex items-center gap-2 mb-1.5">
         <Icon className="w-4 h-4 text-accent" />
-        <span className="text-xs text-slate-500 uppercase tracking-wider">{label}</span>
+        <span className="text-xs text-slate-500 uppercase tracking-wider">
+          {label}
+        </span>
       </div>
       <div className="text-sm font-medium text-slate-200 truncate">{value}</div>
     </div>
-  )
+  );
 }
-
-function Row({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function Row({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-slate-500">{label}</dt>
-      <dd className={cn('text-slate-200 text-right truncate', mono && 'font-mono text-xs selectable')}>
+      <dd
+        className={cn(
+          "text-slate-200 text-right truncate",
+          mono && "font-mono text-xs selectable",
+        )}
+      >
         {value}
       </dd>
     </div>
-  )
+  );
 }
-
-function InstalledAppsModal({ device, onClose }: { device: Device | null; onClose: () => void }) {
-  const [packages, setPackages] = useState<InstalledPackage[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [query, setQuery] = useState('')
-  const [includeSystem, setIncludeSystem] = useState(false)
-  const [pendingUninstall, setPendingUninstall] = useState<string | null>(null)
-  const [isUninstalling, setIsUninstalling] = useState(false)
-  // Set when the vendor refuses removal and disabling is the only option left.
-  const [blockedPackage, setBlockedPackage] = useState<{ name: string; reason: string } | null>(
-    null
-  )
-
+function InstalledAppsModal({
+  device,
+  onClose,
+}: {
+  device: Device | null;
+  onClose: () => void;
+}) {
+  const [packages, setPackages] = useState<InstalledPackage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [includeSystem, setIncludeSystem] = useState(false);
+  const [pendingUninstall, setPendingUninstall] = useState<string | null>(null);
+  const [isUninstalling, setIsUninstalling] = useState(false);
+  const [blockedPackage, setBlockedPackage] = useState<{
+    name: string;
+    reason: string;
+  } | null>(null);
   useEffect(() => {
     if (!device) {
-      setPackages([])
-      setQuery('')
-      return
+      setPackages([]);
+      setQuery("");
+      return;
     }
-
-    let cancelled = false
-    setIsLoading(true)
-
+    let cancelled = false;
+    setIsLoading(true);
     deviceService
       .getInstalledApps(device.serial, includeSystem)
       .then((result) => {
-        if (!cancelled) setPackages(result)
+        if (!cancelled) setPackages(result);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          notify.error('Could not list apps', error instanceof Error ? error.message : undefined)
+          notify.error(
+            "Could not list apps",
+            error instanceof Error ? error.message : undefined,
+          );
         }
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-
+        if (!cancelled) setIsLoading(false);
+      });
     return () => {
-      cancelled = true
-    }
-  }, [device, includeSystem])
-
+      cancelled = true;
+    };
+  }, [device, includeSystem]);
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    if (!needle) return packages
-    return packages.filter((pkg) => pkg.packageName.toLowerCase().includes(needle))
-  }, [packages, query])
-
+    const needle = query.trim().toLowerCase();
+    if (!needle) return packages;
+    return packages.filter((pkg) =>
+      pkg.packageName.toLowerCase().includes(needle),
+    );
+  }, [packages, query]);
   const uninstall = async (): Promise<void> => {
-    if (!device || !pendingUninstall) return
-
-    setIsUninstalling(true)
+    if (!device || !pendingUninstall) return;
+    setIsUninstalling(true);
     try {
-      const result = await deviceService.uninstall(device.serial, pendingUninstall)
-
+      const result = await deviceService.uninstall(
+        device.serial,
+        pendingUninstall,
+      );
       if (!result.success) {
-        // The vendor blocked removal. Offer disabling as a separate, explicit
-        // choice rather than quietly doing something else.
-        const name = pendingUninstall
-        setPendingUninstall(null)
+        const name = pendingUninstall;
+        setPendingUninstall(null);
         if (result.canDisable) {
-          setBlockedPackage({ name, reason: result.error ?? 'The device refused to remove it.' })
+          setBlockedPackage({
+            name,
+            reason: result.error ?? "The device refused to remove it.",
+          });
         } else {
-          notify.error('Uninstall failed', result.error)
+          notify.error("Uninstall failed", result.error);
         }
-        return
+        return;
       }
-
-      setPackages((prev) => prev.filter((p) => p.packageName !== pendingUninstall))
+      setPackages((prev) =>
+        prev.filter((p) => p.packageName !== pendingUninstall),
+      );
       notify.success(
-        result.mode === 'user' ? 'Removed for this user' : 'Uninstalled',
-        result.mode === 'user'
+        result.mode === "user" ? "Removed for this user" : "Uninstalled",
+        result.mode === "user"
           ? `${pendingUninstall} is a system app, so it was removed for the current user. The APK stays on the system partition.`
-          : pendingUninstall
-      )
-      setPendingUninstall(null)
+          : pendingUninstall,
+      );
+      setPendingUninstall(null);
     } catch (error) {
-      notify.error('Uninstall failed', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Uninstall failed",
+        error instanceof Error ? error.message : undefined,
+      );
     } finally {
-      setIsUninstalling(false)
+      setIsUninstalling(false);
     }
-  }
-
+  };
   const disableBlocked = async (): Promise<void> => {
-    if (!device || !blockedPackage) return
-
-    setIsUninstalling(true)
+    if (!device || !blockedPackage) return;
+    setIsUninstalling(true);
     try {
-      await deviceService.disableApp(device.serial, blockedPackage.name)
-      setPackages((prev) => prev.filter((p) => p.packageName !== blockedPackage.name))
+      await deviceService.disableApp(device.serial, blockedPackage.name);
+      setPackages((prev) =>
+        prev.filter((p) => p.packageName !== blockedPackage.name),
+      );
       notify.success(
-        'App disabled',
-        `${blockedPackage.name} is disabled for the current user. Re-enable it with: adb shell pm enable --user 0 ${blockedPackage.name}`
-      )
-      setBlockedPackage(null)
+        "App disabled",
+        `${blockedPackage.name} is disabled for the current user. Re-enable it with: adb shell pm enable --user 0 ${blockedPackage.name}`,
+      );
+      setBlockedPackage(null);
     } catch (error) {
-      notify.error('Could not disable', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Could not disable",
+        error instanceof Error ? error.message : undefined,
+      );
     } finally {
-      setIsUninstalling(false)
+      setIsUninstalling(false);
     }
-  }
-
+  };
   return (
     <>
       <Modal
         open={Boolean(device)}
         title="Installed apps"
-        description={device ? `${device.model || device.serial} · ${packages.length} package(s)` : ''}
+        description={
+          device
+            ? `${device.model || device.serial} · ${packages.length} package(s)`
+            : ""
+        }
         onClose={onClose}
       >
         <div className="flex items-center gap-3 mb-4">
@@ -479,15 +585,22 @@ function InstalledAppsModal({ device, onClose }: { device: Device | null; onClos
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-slate-500 py-8 text-center">Reading packages from device…</p>
+          <p className="text-sm text-slate-500 py-8 text-center">
+            Reading packages from device…
+          </p>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-slate-500 py-8 text-center">
-            {packages.length === 0 ? 'No user apps installed' : 'No packages match that filter'}
+            {packages.length === 0
+              ? "No user apps installed"
+              : "No packages match that filter"}
           </p>
         ) : (
           <ul className="divide-y divide-white/[0.04]">
             {filtered.map((pkg) => (
-              <li key={pkg.packageName} className="flex items-center gap-3 py-2.5">
+              <li
+                key={pkg.packageName}
+                className="flex items-center gap-3 py-2.5"
+              >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-mono text-slate-200 truncate selectable">
                     {pkg.packageName}
@@ -495,8 +608,10 @@ function InstalledAppsModal({ device, onClose }: { device: Device | null; onClos
                   {pkg.installedByApp && (
                     <p className="text-xs text-slate-500 mt-0.5">
                       Installed here
-                      {pkg.versionName ? ` · v${pkg.versionName}` : ''}
-                      {pkg.installedAt ? ` · ${formatDate(pkg.installedAt)}` : ''}
+                      {pkg.versionName ? ` · v${pkg.versionName}` : ""}
+                      {pkg.installedAt
+                        ? ` · ${formatDate(pkg.installedAt)}`
+                        : ""}
                     </p>
                   )}
                 </div>
@@ -535,39 +650,38 @@ function InstalledAppsModal({ device, onClose }: { device: Device | null; onClos
         onCancel={() => setBlockedPackage(null)}
       />
     </>
-  )
+  );
 }
-
 function WifiConnectModal({
   open,
   onClose,
-  onConnected
+  onConnected,
 }: {
-  open: boolean
-  onClose: () => void
-  onConnected: (devices: Device[]) => void
+  open: boolean;
+  onClose: () => void;
+  onConnected: (devices: Device[]) => void;
 }) {
-  const [address, setAddress] = useState('')
-  const [isConnecting, setIsConnecting] = useState(false)
-
+  const [address, setAddress] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
   const connect = async (): Promise<void> => {
-    const value = address.trim()
-    if (!value) return
-
-    setIsConnecting(true)
+    const value = address.trim();
+    if (!value) return;
+    setIsConnecting(true);
     try {
-      const result = await deviceService.connect(value)
-      notify.success('Connected', result.message)
-      const devices = await deviceService.list()
-      onConnected(devices)
-      setAddress('')
+      const result = await deviceService.connect(value);
+      notify.success("Connected", result.message);
+      const devices = await deviceService.list();
+      onConnected(devices);
+      setAddress("");
     } catch (error) {
-      notify.error('Connection failed', error instanceof Error ? error.message : undefined)
+      notify.error(
+        "Connection failed",
+        error instanceof Error ? error.message : undefined,
+      );
     } finally {
-      setIsConnecting(false)
+      setIsConnecting(false);
     }
-  }
-
+  };
   return (
     <Modal
       open={open}
@@ -585,7 +699,7 @@ function WifiConnectModal({
             onClick={() => void connect()}
             disabled={!address.trim() || isConnecting}
           >
-            {isConnecting ? 'Connecting…' : 'Connect'}
+            {isConnecting ? "Connecting…" : "Connect"}
           </button>
         </>
       }
@@ -597,14 +711,15 @@ function WifiConnectModal({
         value={address}
         onChange={(e) => setAddress(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') void connect()
+          if (e.key === "Enter") void connect();
         }}
         spellCheck={false}
       />
       <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-        On the device, enable Wireless debugging in Developer Options, or run{' '}
-        <code className="text-accent">adb tcpip 5555</code> while it is plugged in over USB.
+        On the device, enable Wireless debugging in Developer Options, or run{" "}
+        <code className="text-accent">adb tcpip 5555</code> while it is plugged
+        in over USB.
       </p>
     </Modal>
-  )
+  );
 }

@@ -1,18 +1,16 @@
-import { HashRouter, Routes, Route } from 'react-router-dom'
-import { Sidebar } from '@/components/Sidebar'
-import { TitleBar } from '@/components/TitleBar'
-import { Toasts } from '@/components/Toasts'
-import { useEventBridge } from '@/hooks/useEventBridge'
-import { HomePage } from '@/pages/HomePage'
-import { SourcesPage } from '@/pages/SourcesPage'
-import { AddSourceWizard } from '@/pages/AddSourceWizard'
-import { DevicesPage } from '@/pages/DevicesPage'
-import { DownloadsPage } from '@/pages/DownloadsPage'
-import { SettingsPage } from '@/pages/SettingsPage'
-
+import { HashRouter, Routes, Route } from "react-router-dom";
+import { Sidebar } from "@/components/Sidebar";
+import { TitleBar } from "@/components/TitleBar";
+import { Toasts } from "@/components/Toasts";
+import { useEventBridge } from "@/hooks/useEventBridge";
+import { HomePage } from "@/pages/HomePage";
+import { SourcesPage } from "@/pages/SourcesPage";
+import { AddSourceWizard } from "@/pages/AddSourceWizard";
+import { DevicesPage } from "@/pages/DevicesPage";
+import { DownloadsPage } from "@/pages/DownloadsPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 export function App() {
-  useEventBridge()
-
+  useEventBridge();
   return (
     <HashRouter>
       <div className="flex flex-col h-screen overflow-hidden bg-surface-500">
@@ -33,5 +31,5 @@ export function App() {
         <Toasts />
       </div>
     </HashRouter>
-  )
+  );
 }

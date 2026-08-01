@@ -1,86 +1,71 @@
-import { Route, Request, Response, Page } from 'playwright-core'
-import { BrowserManager } from './browserManager'
-
+import { Route, Request, Response, Page } from "playwright-core";
+import { BrowserManager } from "./browserManager";
 interface InterceptedDownload {
-  url: string
-  filename?: string
-  mimeType?: string
-  headers: Record<string, string>
+  url: string;
+  filename?: string;
+  mimeType?: string;
+  headers: Record<string, string>;
 }
-
 export interface CaptureOptions {
-  clickSelector?: string
-  waitTimeout?: number
-  /**
-   * How long to wait for a human-verification page to clear. In a visible
-   * window this is the user's time to complete the check themselves.
-   */
-  challengeTimeout?: number
+  clickSelector?: string;
+  waitTimeout?: number;
+  challengeTimeout?: number;
 }
-
-/** Raised when a site is gated behind a human-verification page. */
 export class HumanVerificationRequiredError extends Error {
   constructor(readonly pageUrl: string) {
-    super('The site is behind a human-verification check')
-    this.name = 'HumanVerificationRequiredError'
+    super("The site is behind a human-verification check");
+    this.name = "HumanVerificationRequiredError";
   }
 }
-
 const APK_MIME_TYPES = [
-  'application/vnd.android.package-archive',
-  'application/octet-stream',
-  'application/x-zip',
-  'application/zip'
-]
-
-const APK_EXTENSIONS = ['.apk', '.xapk', '.apks']
-
-const CHALLENGE_TITLES = [/just a moment/i, /checking your browser/i, /attention required/i]
+  "application/vnd.android.package-archive",
+  "application/octet-stream",
+  "application/x-zip",
+  "application/zip",
+];
+const APK_EXTENSIONS = [".apk", ".xapk", ".apks"];
+const CHALLENGE_TITLES = [
+  /just a moment/i,
+  /checking your browser/i,
+  /attention required/i,
+];
 const CHALLENGE_SELECTORS = [
-  '#challenge-form',
-  '#cf-challenge-running',
-  '.cf-browser-verification',
-  '[data-translate="checking_browser"]'
-]
-
+  "#challenge-form",
+  "#cf-challenge-running",
+  ".cf-browser-verification",
+  '[data-translate="checking_browser"]',
+];
 export class NetworkInterceptor {
-  private browserManager: BrowserManager
-  private interceptedDownloads: InterceptedDownload[] = []
-
+  private browserManager: BrowserManager;
+  private interceptedDownloads: InterceptedDownload[] = [];
   constructor(browserManager: BrowserManager) {
-    this.browserManager = browserManager
+    this.browserManager = browserManager;
   }
-
   async captureDownloadUrl(
     pageUrl: string,
-    options: CaptureOptions = {}
+    options: CaptureOptions = {},
   ): Promise<InterceptedDownload | null> {
-    this.interceptedDownloads = []
-    const context = await this.browserManager.getContext()
-    const page = await context.newPage()
-
+    this.interceptedDownloads = [];
+    const context = await this.browserManager.getContext();
+    const page = await context.newPage();
     try {
-      // A real download attempt is the strongest signal there is.
-      page.on('download', (download) => {
+      page.on("download", (download) => {
         this.interceptedDownloads.unshift({
           url: download.url(),
-          filename: download.suggestedFilename() || this.extractFilename(download.url()),
-          headers: {}
-        })
-        void download.cancel().catch(() => undefined)
-      })
-
-      // Some sites serve an APK from a URL that looks nothing like one, so
-      // watch response headers as well as request URLs.
-      page.on('response', (response: Response) => {
-        const headers = response.headers()
-        const contentType = (headers['content-type'] || '').toLowerCase()
-        const disposition = headers['content-disposition'] || ''
-
+          filename:
+            download.suggestedFilename() ||
+            this.extractFilename(download.url()),
+          headers: {},
+        });
+        void download.cancel().catch(() => undefined);
+      });
+      page.on("response", (response: Response) => {
+        const headers = response.headers();
+        const contentType = (headers["content-type"] || "").toLowerCase();
+        const disposition = headers["content-disposition"] || "";
         const looksLikeApk =
           APK_MIME_TYPES.some((mime) => contentType.startsWith(mime)) &&
-          /\.(apk|xapk|apks)/i.test(disposition)
-
+          /\.(apk|xapk|apks)/i.test(disposition);
         if (looksLikeApk) {
           this.interceptedDownloads.push({
             url: response.url(),
@@ -88,121 +73,93 @@ export class NetworkInterceptor {
               disposition.match(/filename="?([^";]+)"?/i)?.[1] ??
               this.extractFilename(response.url()),
             mimeType: contentType,
-            headers: {}
-          })
+            headers: {},
+          });
         }
-      })
-
-      await page.route('**/*', async (route: Route, request: Request) => {
-        const url = request.url()
-        const resourceType = request.resourceType()
-
+      });
+      await page.route("**/*", async (route: Route, request: Request) => {
+        const url = request.url();
+        const resourceType = request.resourceType();
         if (this.isApkUrl(url)) {
-          const headers = await request.allHeaders()
+          const headers = await request.allHeaders();
           this.interceptedDownloads.push({
             url,
             filename: this.extractFilename(url),
-            headers
-          })
-          await route.abort()
-          return
+            headers,
+          });
+          await route.abort();
+          return;
         }
-
-        // Images and fonts only slow the page down; scripts must run.
-        if (resourceType === 'image' || resourceType === 'media' || resourceType === 'font') {
-          await route.abort()
-          return
+        if (
+          resourceType === "image" ||
+          resourceType === "media" ||
+          resourceType === "font"
+        ) {
+          await route.abort();
+          return;
         }
-
-        await route.continue()
-      })
-
+        await route.continue();
+      });
       await page.goto(pageUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: options.waitTimeout ?? 30000
-      })
-
-      await this.waitOutChallenge(page, options.challengeTimeout ?? 12000)
-
-      if (this.interceptedDownloads.length > 0) return this.interceptedDownloads[0]
-
+        waitUntil: "domcontentloaded",
+        timeout: options.waitTimeout ?? 30000,
+      });
+      await this.waitOutChallenge(page, options.challengeTimeout ?? 12000);
+      if (this.interceptedDownloads.length > 0)
+        return this.interceptedDownloads[0];
       if (options.clickSelector) {
         try {
-          await page.click(options.clickSelector, { timeout: 5000 })
-          await page.waitForTimeout(3000)
-          if (this.interceptedDownloads.length > 0) return this.interceptedDownloads[0]
-        } catch {
-          // Selector missing or not clickable — fall through to the generic pass.
-        }
+          await page.click(options.clickSelector, { timeout: 5000 });
+          await page.waitForTimeout(3000);
+          if (this.interceptedDownloads.length > 0)
+            return this.interceptedDownloads[0];
+        } catch {}
       }
-
       const downloadButtons = await page.$$(
-        'a[href*=".apk"], a[href*=".xapk"], a[href*="download"], button:has-text("Download")'
-      )
-
+        'a[href*=".apk"], a[href*=".xapk"], a[href*="download"], button:has-text("Download")',
+      );
       for (const button of downloadButtons.slice(0, 6)) {
         try {
-          await button.click({ timeout: 3000 })
-          await page.waitForTimeout(2000)
-          if (this.interceptedDownloads.length > 0) return this.interceptedDownloads[0]
-        } catch {
-          // Element detached or covered — try the next candidate.
-        }
+          await button.click({ timeout: 3000 });
+          await page.waitForTimeout(2000);
+          if (this.interceptedDownloads.length > 0)
+            return this.interceptedDownloads[0];
+        } catch {}
       }
-
-      return this.interceptedDownloads[0] ?? null
+      return this.interceptedDownloads[0] ?? null;
     } finally {
-      await page.close().catch(() => undefined)
+      await page.close().catch(() => undefined);
     }
   }
-
-  /**
-   * Cloudflare-style checks often clear on their own once scripts have run.
-   * We simply wait for that to happen — no attempt is made to defeat the check.
-   * If it is still up when time runs out, the caller is told so it can ask the
-   * user to complete it in a visible window.
-   */
   private async waitOutChallenge(page: Page, timeout: number): Promise<void> {
-    if (!(await this.isChallengePage(page))) return
-
-    const deadline = Date.now() + timeout
-
+    if (!(await this.isChallengePage(page))) return;
+    const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
-      await page.waitForTimeout(1000)
-      if (!(await this.isChallengePage(page))) return
+      await page.waitForTimeout(1000);
+      if (!(await this.isChallengePage(page))) return;
     }
-
-    throw new HumanVerificationRequiredError(page.url())
+    throw new HumanVerificationRequiredError(page.url());
   }
-
   private async isChallengePage(page: Page): Promise<boolean> {
     try {
-      const title = await page.title()
-      if (CHALLENGE_TITLES.some((pattern) => pattern.test(title))) return true
-
+      const title = await page.title();
+      if (CHALLENGE_TITLES.some((pattern) => pattern.test(title))) return true;
       for (const selector of CHALLENGE_SELECTORS) {
-        if ((await page.$(selector)) !== null) return true
+        if ((await page.$(selector)) !== null) return true;
       }
-    } catch {
-      // Page navigated mid-check — treat as no longer challenged.
-    }
-
-    return false
+    } catch {}
+    return false;
   }
-
   private isApkUrl(url: string): boolean {
-    const lower = url.toLowerCase()
-    return APK_EXTENSIONS.some((ext) => lower.includes(ext))
+    const lower = url.toLowerCase();
+    return APK_EXTENSIONS.some((ext) => lower.includes(ext));
   }
-
   private extractFilename(url: string): string | undefined {
     try {
-      const segments = new URL(url).pathname.split('/')
-      const last = segments[segments.length - 1]
-      if (last && last.includes('.')) return decodeURIComponent(last)
-    } catch {
-      /* not a parseable URL */
-    }
-    return undefined
+      const segments = new URL(url).pathname.split("/");
+      const last = segments[segments.length - 1];
+      if (last && last.includes(".")) return decodeURIComponent(last);
+    } catch {}
+    return undefined;
   }
 }

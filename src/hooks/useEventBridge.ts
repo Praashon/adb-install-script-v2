@@ -1,97 +1,86 @@
-import { useEffect, useRef } from 'react'
-import { useAppStore } from '@/stores/appStore'
-import { deviceService, jobService, onAppEvent, sourceService } from '@/services'
-import type { Device, Job } from '@/types'
-
+import { useEffect, useRef } from "react";
+import { useAppStore } from "@/stores/appStore";
+import {
+  deviceService,
+  jobService,
+  onAppEvent,
+  sourceService,
+} from "@/services";
+import type { Device, Job } from "@/types";
 interface EventPayload {
-  source: string
-  level: 'debug' | 'info' | 'warn' | 'error'
-  message: string
-  data?: Record<string, unknown>
-  jobId?: string
-  timestamp: number
+  source: string;
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+  data?: Record<string, unknown>;
+  jobId?: string;
+  timestamp: number;
 }
-
-/**
- * Single subscription to the main-process event bus. Everything downstream
- * reads from the store, so no page needs to poll.
- */
 export function useEventBridge(): void {
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    const store = useAppStore.getState()
-
+    const store = useAppStore.getState();
     const refreshJobs = (): void => {
-      if (refreshTimer.current) return
+      if (refreshTimer.current) return;
       refreshTimer.current = setTimeout(() => {
-        refreshTimer.current = null
+        refreshTimer.current = null;
         jobService
           .getAll()
           .then((jobs) => useAppStore.getState().setJobs(jobs))
-          .catch(() => undefined)
-      }, 250)
-    }
-
-    // Initial hydration.
+          .catch(() => undefined);
+      }, 250);
+    };
     void deviceService
       .list()
       .then((devices) => store.setDevices(devices))
-      .catch(() => undefined)
+      .catch(() => undefined);
     void jobService
       .getAll()
       .then((jobs) => store.setJobs(jobs))
-      .catch(() => undefined)
+      .catch(() => undefined);
     void sourceService
       .getAll()
       .then((sources) => store.setSources(sources))
-      .catch(() => undefined)
-
+      .catch(() => undefined);
     const unsubscribe = onAppEvent((eventName, rawData) => {
-      const payload = rawData as EventPayload
-      const state = useAppStore.getState()
-
-      if (eventName === 'device:update') {
+      const payload = rawData as EventPayload;
+      const state = useAppStore.getState();
+      if (eventName === "device:update") {
         const data = payload.data as
-          | { devices?: Device[]; error?: string; adbAvailable?: boolean }
-          | undefined
-
-        state.setDevices(data?.devices ?? [])
-        state.setAdbStatus(data?.adbAvailable !== false, data?.error ?? null)
-        return
+          | {
+              devices?: Device[];
+              error?: string;
+              adbAvailable?: boolean;
+            }
+          | undefined;
+        state.setDevices(data?.devices ?? []);
+        state.setAdbStatus(data?.adbAvailable !== false, data?.error ?? null);
+        return;
       }
-
-      if (eventName === 'window:state') return
-
-      if (eventName === 'job:update' || eventName.startsWith('job:')) {
-        const jobId = payload.jobId
-        const data = payload.data ?? {}
-
+      if (eventName === "window:state") return;
+      if (eventName === "job:update" || eventName.startsWith("job:")) {
+        const jobId = payload.jobId;
+        const data = payload.data ?? {};
         if (jobId) {
-          const patch: Partial<Job> = {}
-          if (typeof data.progress === 'number') patch.progress = data.progress
-          if (typeof data.step === 'string') patch.currentStep = data.step
-          if (Object.keys(patch).length > 0) state.patchJob(jobId, patch)
+          const patch: Partial<Job> = {};
+          if (typeof data.progress === "number") patch.progress = data.progress;
+          if (typeof data.step === "string") patch.currentStep = data.step;
+          if (Object.keys(patch).length > 0) state.patchJob(jobId, patch);
         }
-
-        // Status transitions live in the database - pull the authoritative row.
-        refreshJobs()
+        refreshJobs();
       }
-
-      if (payload.level !== 'debug') {
+      if (payload.level !== "debug") {
         state.addLog({
           level: payload.level,
           source: payload.source,
           message: payload.message,
           jobId: payload.jobId,
-          timestamp: payload.timestamp ?? Date.now()
-        })
+          timestamp: payload.timestamp ?? Date.now(),
+        });
       }
-    })
-
+    });
     return () => {
-      unsubscribe()
-      if (refreshTimer.current) clearTimeout(refreshTimer.current)
-    }
-  }, [])
+      unsubscribe();
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    };
+  }, []);
 }
