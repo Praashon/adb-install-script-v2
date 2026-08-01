@@ -1,0 +1,9 @@
+{
+  "name": "com.adb_installer_pro.app",
+  "description": "ADB APK Installer Pro Native Messaging Host",
+  "path": "host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://*/*"
+  ]
+}

@@ -57,6 +57,33 @@ async function bootstrap(): Promise<void> {
   })
 
   await jobRunner.recoverPendingJobs()
+
+  // Start extension socket server
+  const net = require('net')
+  const server = net.createServer((socket: any) => {
+    socket.on('data', (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString())
+        if (message.action === 'install' && message.url) {
+          database.jobs.create(message.url)
+          jobRunner.start()
+          socket.write(JSON.stringify({ success: true, message: 'Job created' }))
+          if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore()
+            mainWindow.focus()
+          }
+        } else {
+          socket.write(JSON.stringify({ error: 'Unknown action' }))
+        }
+      } catch (err) {
+        socket.write(JSON.stringify({ error: 'Invalid JSON' }))
+      }
+    })
+  })
+  
+  server.listen(12845, '127.0.0.1', () => {
+    console.log('Extension socket server listening on port 12845')
+  })
 }
 
 app.whenReady().then(async () => {
