@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "parserType": "html",
+  "rules": {
+    "downloadPageSelector": "a.download-btn",
+    "downloadLinkSelector": "a[href*='/download/']",
+    "appNameSelector": "h1.app-name",
+    "versionSelector": "span.version",
+    "fallbackSelectors": [
+      "a[href*='.apk']",
+      "a[href*='.xapk']",
+      "a.variant-download"
+    ],
+    "downloadButtonText": ["Download", "Download APK"]
+  },
+  "downloadStrategy": "html",
+  "metadata": {
+    "requiresBrowser": false,
+    "hasRedirects": true,
+    "maxRedirects": 3,
+    "timeout": 30000
+  }
+}

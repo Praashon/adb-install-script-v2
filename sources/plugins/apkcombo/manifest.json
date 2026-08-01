@@ -1,0 +1,11 @@
+{
+  "id": "apkcombo",
+  "name": "APKCombo",
+  "description": "Adapter for apkcombo.com",
+  "domain": "apkcombo.com",
+  "author": "built-in",
+  "supportedFormats": ["apk", "xapk", "apks"],
+  "currentVersion": 1,
+  "status": "healthy",
+  "createdAt": "2026-08-01T00:00:00Z"
+}

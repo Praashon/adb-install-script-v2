@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "parserType": "html",
+  "rules": {
+    "downloadLinkSelector": "a[href$='.apk']",
+    "fallbackSelectors": [
+      "a[href$='.xapk']",
+      "a[href$='.apks']"
+    ]
+  },
+  "downloadStrategy": "direct",
+  "metadata": {
+    "requiresBrowser": false,
+    "hasRedirects": true,
+    "maxRedirects": 5,
+    "timeout": 60000
+  }
+}

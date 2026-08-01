@@ -1,0 +1,11 @@
+{
+  "id": "apkpure",
+  "name": "APKPure",
+  "description": "Adapter for apkpure.com - APK and XAPK downloads",
+  "domain": "apkpure.com",
+  "author": "built-in",
+  "supportedFormats": ["apk", "xapk"],
+  "currentVersion": 1,
+  "status": "healthy",
+  "createdAt": "2026-08-01T00:00:00Z"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "direct-link",
+  "name": "Direct APK Link",
+  "description": "Catch-all adapter for direct APK file URLs",
+  "domain": "*",
+  "author": "built-in",
+  "supportedFormats": ["apk", "xapk", "apks", "zip"],
+  "currentVersion": 1,
+  "status": "healthy",
+  "createdAt": "2026-08-01T00:00:00Z"
+}

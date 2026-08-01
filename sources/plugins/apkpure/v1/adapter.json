@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "parserType": "html",
+  "rules": {
+    "downloadPageSelector": "a.download-start-btn",
+    "downloadLinkSelector": "a[href*='/APK/']",
+    "appNameSelector": "h1.app-title",
+    "versionSelector": "span.version",
+    "fallbackSelectors": [
+      "a.da",
+      "a[href*='.apk']",
+      "a[href*='.xapk']",
+      "a.is-download"
+    ],
+    "downloadButtonText": ["Download APK", "Download XAPK"]
+  },
+  "downloadStrategy": "html",
+  "urlPatterns": {
+    "appPage": "/{app}/download"
+  },
+  "metadata": {
+    "requiresBrowser": false,
+    "hasRedirects": true,
+    "maxRedirects": 3,
+    "timeout": 30000
+  }
+}

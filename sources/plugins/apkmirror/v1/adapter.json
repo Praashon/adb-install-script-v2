@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "parserType": "html",
+  "rules": {
+    "downloadPageSelector": "a.downloadButton",
+    "downloadLinkSelector": "a[href*='download.php']",
+    "appNameSelector": "h1.app-name",
+    "versionSelector": "span.appRowTitle",
+    "fallbackSelectors": [
+      "a[href*='.apk']",
+      "a.accent_bg",
+      "a[data-google-interstitial='false']"
+    ],
+    "downloadButtonText": ["Download APK", "Download Bundle"]
+  },
+  "downloadStrategy": "redirect",
+  "urlPatterns": {
+    "appPage": "/apk/{publisher}/{app}/",
+    "downloadPage": "/apk/{publisher}/{app}/{app}-{version}-release/"
+  },
+  "metadata": {
+    "requiresBrowser": false,
+    "hasRedirects": true,
+    "maxRedirects": 5,
+    "timeout": 30000
+  },
+  "headers": {
+    "Referer": "https://www.apkmirror.com/"
+  }
+}
