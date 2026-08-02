@@ -31,6 +31,21 @@ export interface AppInfo {
   downloadDirectory: string;
   pluginDirectory: string;
 }
+export type BloatRisk = "safe" | "caution" | "expert";
+export interface BloatMatch {
+  packageName: string;
+  id: string;
+  label: string;
+  vendor: string;
+  risk: BloatRisk;
+  description: string;
+}
+export interface BloatScanResult {
+  matches: BloatMatch[];
+  scanned: number;
+  catalogSize: number;
+}
+export type RemovalMode = "full" | "user" | "disabled";
 export interface ElectronAPI {
   window: {
     minimize(): void;
@@ -105,6 +120,14 @@ export interface ElectronAPI {
       packageName: string,
     ): Promise<{
       success: boolean;
+    }>;
+    scanBloat(serial: string): Promise<BloatScanResult>;
+    removeBloat(
+      serial: string,
+      packageName: string,
+    ): Promise<{
+      success: boolean;
+      mode: RemovalMode;
     }>;
     connect(address: string): Promise<{
       success: boolean;
@@ -190,6 +213,9 @@ const api: ElectronAPI = {
       ipcRenderer.invoke("device:uninstall", serial, packageName),
     disableApp: (serial, packageName) =>
       ipcRenderer.invoke("device:disableApp", serial, packageName),
+    scanBloat: (serial) => ipcRenderer.invoke("device:scanBloat", serial),
+    removeBloat: (serial, packageName) =>
+      ipcRenderer.invoke("device:removeBloat", serial, packageName),
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),
     adbStatus: () => ipcRenderer.invoke("device:adbStatus"),

@@ -393,7 +393,7 @@ function registerDeviceHandlers(ctx: AppContext): void {
     if (!full.success) {
       ctx.eventBus.adb(
         "info",
-        `Direct uninstall of ${packageName} was refused — removing it for the current user instead`,
+        `Direct uninstall of ${packageName} was refused, removing it for the current user instead`,
         { serial, reason: full.error },
       );
       const perUser = await adb.uninstallForUser(packageName, serial);
@@ -432,6 +432,44 @@ function registerDeviceHandlers(ctx: AppContext): void {
     });
     return { success: true };
   });
+  handle("device:scanBloat", async (serial: string) => {
+    const { matchBloat, catalogSize } = await import(
+      "@adb-engine/bloatCatalog"
+    );
+    const adb = ctx.createAdbManager();
+    const packages = await adb.listPackages(serial, true);
+    const matches = matchBloat(packages.map((p) => p.packageName));
+    return { matches, scanned: packages.length, catalogSize: catalogSize() };
+  });
+
+  handle(
+    "device:removeBloat",
+    async (serial: string, packageName: string) => {
+      const adb = ctx.createAdbManager();
+
+      let result = await adb.uninstallForUser(packageName, serial);
+      if (!result.success) {
+        result = await adb.disableForUser(packageName, serial);
+      }
+
+      if (!result.success) {
+        throw new Error(
+          result.error || `Could not remove ${packageName}`,
+        );
+      }
+
+      const device = ctx.deviceRepo.findBySerial(serial);
+      if (device) ctx.installedAppRepo.removeByPackage(packageName, device.id);
+
+      ctx.eventBus.adb(
+        "info",
+        `Debloat removed ${packageName} (${result.mode})`,
+        { serial, mode: result.mode },
+      );
+      return { success: true, mode: result.mode };
+    },
+  );
+
   handle("device:connect", async (address: string) => {
     const adb = ctx.createAdbManager();
     const result = await adb.connect(address.trim());

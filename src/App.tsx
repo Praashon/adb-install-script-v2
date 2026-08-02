@@ -12,6 +12,7 @@ import { HomePage } from "@/pages/HomePage";
 import { SourcesPage } from "@/pages/SourcesPage";
 import { AddSourceWizard } from "@/pages/AddSourceWizard";
 import { DevicesPage } from "@/pages/DevicesPage";
+import { DebloatPage } from "@/pages/DebloatPage";
 import { DownloadsPage } from "@/pages/DownloadsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
@@ -27,6 +28,7 @@ function Shell() {
         <Route path="/sources" element={<SourcesPage />} />
         <Route path="/sources/add" element={<AddSourceWizard />} />
         <Route path="/devices" element={<DevicesPage />} />
+        <Route path="/debloat" element={<DebloatPage />} />
         <Route path="/downloads" element={<DownloadsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
