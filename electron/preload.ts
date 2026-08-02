@@ -141,6 +141,13 @@ export interface ElectronAPI {
     recordStart(serial: string): Promise<{ recording: boolean }>;
     recordStop(serial: string): Promise<{ path: string }>;
     recordStatus(serial: string): Promise<{ recording: boolean }>;
+    pair(
+      address: string,
+      code: string,
+    ): Promise<{
+      success: boolean;
+      message: string;
+    }>;
     connect(address: string): Promise<{
       success: boolean;
       message: string;
@@ -234,6 +241,7 @@ const api: ElectronAPI = {
     recordStart: (serial) => ipcRenderer.invoke("device:recordStart", serial),
     recordStop: (serial) => ipcRenderer.invoke("device:recordStop", serial),
     recordStatus: (serial) => ipcRenderer.invoke("device:recordStatus", serial),
+    pair: (address, code) => ipcRenderer.invoke("device:pair", address, code),
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),
     adbStatus: () => ipcRenderer.invoke("device:adbStatus"),

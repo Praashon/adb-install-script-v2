@@ -110,6 +110,8 @@ export const deviceService = {
   recordStop: (serial: string) => call(() => api().devices.recordStop(serial)),
   recordStatus: (serial: string) =>
     call(() => api().devices.recordStatus(serial)),
+  pair: (address: string, code: string) =>
+    call(() => api().devices.pair(address, code)),
   connect: (address: string) => call(() => api().devices.connect(address)),
   disconnect: (address: string) =>
     call(() => api().devices.disconnect(address)),

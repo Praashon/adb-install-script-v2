@@ -808,12 +808,38 @@ function WifiConnectModal({
   onClose: () => void;
   onConnected: (devices: Device[]) => void;
 }) {
+  const [mode, setMode] = useState<"pair" | "connect">("pair");
+  const [pairAddress, setPairAddress] = useState("");
+  const [pairCode, setPairCode] = useState("");
   const [address, setAddress] = useState("");
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+
+  const pair = async (): Promise<void> => {
+    const value = pairAddress.trim();
+    const code = pairCode.trim();
+    if (!value || code.length < 6) return;
+    setIsBusy(true);
+    try {
+      await deviceService.pair(value, code);
+      notify.success("Paired", "Now enter the connection address below.");
+      const host = value.split(":")[0];
+      setAddress(host ? `${host}:` : "");
+      setPairCode("");
+      setMode("connect");
+    } catch (error) {
+      notify.error(
+        "Pairing failed",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const connect = async (): Promise<void> => {
     const value = address.trim();
     if (!value) return;
-    setIsConnecting(true);
+    setIsBusy(true);
     try {
       const result = await deviceService.connect(value);
       notify.success("Connected", result.message);
@@ -826,14 +852,20 @@ function WifiConnectModal({
         error instanceof Error ? error.message : undefined,
       );
     } finally {
-      setIsConnecting(false);
+      setIsBusy(false);
     }
   };
+
+  const canSubmit =
+    mode === "pair"
+      ? pairAddress.trim().length > 0 && pairCode.trim().length >= 6
+      : address.trim().length > 0;
+
   return (
     <Modal
       open={open}
-      title="Connect over Wi-Fi"
-      description="Pair a device already running ADB over TCP/IP"
+      title="Wireless debugging"
+      description="Pair a new device, then connect over the network"
       onClose={onClose}
       size="sm"
       footer={
@@ -843,30 +875,98 @@ function WifiConnectModal({
           </button>
           <button
             className="btn-primary"
-            onClick={() => void connect()}
-            disabled={!address.trim() || isConnecting}
+            onClick={() => void (mode === "pair" ? pair() : connect())}
+            disabled={!canSubmit || isBusy}
           >
-            {isConnecting ? "Connecting…" : "Connect"}
+            {isBusy
+              ? "Working"
+              : mode === "pair"
+                ? "Pair device"
+                : "Connect"}
           </button>
         </>
       }
     >
-      <label className="label">Device address</label>
-      <input
-        className="input font-mono"
-        placeholder="192.168.1.42:5555"
-        value={address}
-        onChange={(e) => setAddress(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") void connect();
-        }}
-        spellCheck={false}
-      />
-      <p className="text-xs text-ink-3 mt-3 leading-relaxed">
-        On the device, enable Wireless debugging in Developer Options, or run{" "}
-        <code className="text-signal">adb tcpip 5555</code> while it is plugged
-        in over USB.
-      </p>
+      <div className="flex gap-1 p-1 rounded-lg bg-inset border border-line mb-5">
+        <button
+          className={cn(
+            "flex-1 py-1.5 rounded-md text-sm font-medium transition-colors",
+            mode === "pair"
+              ? "bg-surface text-ink shadow-panel"
+              : "text-ink-2 hover:text-ink",
+          )}
+          onClick={() => setMode("pair")}
+        >
+          Pair (Android 11+)
+        </button>
+        <button
+          className={cn(
+            "flex-1 py-1.5 rounded-md text-sm font-medium transition-colors",
+            mode === "connect"
+              ? "bg-surface text-ink shadow-panel"
+              : "text-ink-2 hover:text-ink",
+          )}
+          onClick={() => setMode("connect")}
+        >
+          Connect
+        </button>
+      </div>
+
+      {mode === "pair" ? (
+        <div className="space-y-4">
+          <div>
+            <label className="label">Pairing address</label>
+            <input
+              className="input font-mono"
+              placeholder="192.168.1.42:37105"
+              value={pairAddress}
+              onChange={(e) => setPairAddress(e.target.value)}
+              spellCheck={false}
+            />
+          </div>
+          <div>
+            <label className="label">Pairing code</label>
+            <input
+              className="input font-mono tracking-[0.4em] text-center"
+              placeholder="000000"
+              inputMode="numeric"
+              maxLength={6}
+              value={pairCode}
+              onChange={(e) =>
+                setPairCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void pair();
+              }}
+              spellCheck={false}
+            />
+          </div>
+          <p className="text-xs text-ink-3 leading-relaxed">
+            On the phone open Developer options, Wireless debugging, then Pair
+            device with pairing code. Enter the address and 6-digit code it
+            shows here.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <label className="label">Connection address</label>
+          <input
+            className="input font-mono"
+            placeholder="192.168.1.42:5555"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void connect();
+            }}
+            spellCheck={false}
+          />
+          <p className="text-xs text-ink-3 leading-relaxed">
+            Use the IP address and port shown on the main Wireless debugging
+            screen. For USB devices you can run{" "}
+            <code className="text-signal">adb tcpip 5555</code> instead.
+          </p>
+        </div>
+      )}
     </Modal>
   );
 }

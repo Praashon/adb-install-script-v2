@@ -319,6 +319,36 @@ export class AdbManager {
       };
     }
   }
+  async pair(
+    address: string,
+    code: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        this.adbPath,
+        ["pair", address, code],
+        { timeout: 30000, windowsHide: true },
+      );
+      const output = `${stdout}${stderr}`.trim();
+      return {
+        success: /successfully paired/i.test(output),
+        message: output || "Paired",
+      };
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException & {
+        stdout?: string;
+        stderr?: string;
+      };
+      const output = `${err.stdout ?? ""}${err.stderr ?? ""}`.trim();
+      return {
+        success: false,
+        message: output || err.message || "Pairing failed",
+      };
+    }
+  }
   async disconnect(address: string): Promise<void> {
     await this.exec(["disconnect", address], 20000).catch(() => undefined);
   }
