@@ -134,7 +134,7 @@ async function detectSource(
   } else {
     helpers.log(
       "warn",
-      `No adapter registered for ${result.domain || "this site"} — falling back to generic extraction`,
+      `No adapter registered for ${result.domain || "this site"}, falling back to generic extraction`,
     );
   }
   helpers.setStepProgress(1);
@@ -216,14 +216,14 @@ async function resolveDownload(
     helpers.log(
       "info",
       blockedReason && isBotBlock(blockedReason)
-        ? "The site blocked a direct request — retrying with the browser engine"
-        : "Static extraction found nothing — trying the browser engine",
+        ? "The site blocked a direct request, retrying with the browser engine"
+        : "Static extraction found nothing, trying the browser engine",
     );
     helpers.setStepProgress(0.85);
     if (settings.browserAssisted) {
       helpers.log(
         "info",
-        "A browser window will open — complete any site check there",
+        "A browser window will open, complete any site check there",
       );
     }
     const browserStrategy = new BrowserDownloadStrategy(deps.eventBus);
@@ -275,7 +275,7 @@ function buildResolveFailureMessage(
     return `Could not load the page: ${blockedReason}`;
   }
   return browserEnabled
-    ? "No APK download link was found on this page. The site layout may have changed — check the adapter selectors under Sources."
+    ? "No APK download link was found on this page. The site layout may have changed, check the adapter selectors under Sources."
     : "No APK download link was found on this page. Enable the browser fallback engine in Settings to handle JavaScript-driven sites.";
 }
 async function probeUrl(
@@ -447,7 +447,7 @@ async function validatePackage(
     const result = validator.validate(ctx.downloadPath);
     if (!result.valid) {
       throw new NonRetryableError(
-        `Not a valid APK — ${result.errors.join("; ")}`,
+        `Not a valid APK, ${result.errors.join("; ")}`,
       );
     }
   }
@@ -589,7 +589,7 @@ async function installApk(
       if (!pushed) {
         helpers.log(
           "warn",
-          `Failed to push ${basename(obbFiles[i])} — the app may not run correctly`,
+          `Failed to push ${basename(obbFiles[i])}, the app may not run correctly`,
         );
       }
       helpers.setStepProgress(0.7 + (0.3 * (i + 1)) / obbFiles.length);
@@ -673,7 +673,7 @@ async function verifyInstallation(
   if (!ctx.packageName) {
     helpers.log(
       "warn",
-      "Package name could not be read from the APK — skipping post-install verification",
+      "Package name could not be read from the APK, skipping post-install verification",
     );
     await cleanupWorkDir(deps.workDir, ctx.jobId);
     return ctx;

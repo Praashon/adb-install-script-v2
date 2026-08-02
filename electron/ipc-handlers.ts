@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, shell, dialog, app } from "electron";
-import { readFileSync, mkdirSync } from "fs";
+import { readFileSync, mkdirSync, statSync } from "fs";
 import { unlink } from "fs/promises";
 import { basename, join } from "path";
 import { AppContext } from "./appContext";
@@ -57,6 +57,44 @@ function captureStamp(): string {
     .replace(/:/g, "-")
     .replace("T", "_");
 }
+function queueLocalInstall(
+  ctx: AppContext,
+  filePath: string,
+  deviceSerial?: string,
+): { jobId: string; filename: string } {
+  const stats = statSync(filePath);
+  const filename = basename(filePath);
+  const url = `file:///${filePath.replace(/\\/g, "/")}`;
+  const device = deviceSerial
+    ? ctx.deviceRepo.findBySerial(deviceSerial)
+    : ctx.deviceRepo.findPreferred();
+
+  const jobId = ctx.jobRepo.create({
+    url,
+    type: "install",
+    deviceId: device?.id,
+  });
+  const downloadId = ctx.downloadRepo.create({
+    jobId,
+    url,
+    filename,
+    filePath,
+    fileSize: stats.size,
+  });
+  ctx.jobRepo.saveContext(jobId, {
+    jobId,
+    url,
+    deviceId: device?.id,
+    deviceSerial: device?.serial,
+    downloadId,
+    downloadPath: filePath,
+    filename,
+    fileSize: stats.size,
+  });
+  ctx.jobRepo.updateProgress(jobId, 0, "validate_package");
+  ctx.eventBus.job(jobId, "info", `Installing ${filename} from disk`);
+  return { jobId, filename };
+}
 function registerWindowHandlers(): void {
   ipcMain.removeAllListeners("window:minimize");
   ipcMain.removeAllListeners("window:maximize");
@@ -101,40 +139,46 @@ function registerJobHandlers(ctx: AppContext): void {
     if (picked.canceled || picked.filePaths.length === 0) {
       return { cancelled: true };
     }
-    const filePath = picked.filePaths[0];
-    const { statSync } = await import("fs");
-    const stats = statSync(filePath);
-    const filename = basename(filePath);
-    const device = deviceSerial
-      ? ctx.deviceRepo.findBySerial(deviceSerial)
-      : ctx.deviceRepo.findPreferred();
-    const jobId = ctx.jobRepo.create({
-      url: `file:///${filePath.replace(/\\/g, "/")}`,
-      type: "install",
-      deviceId: device?.id,
-    });
-    const downloadId = ctx.downloadRepo.create({
-      jobId,
-      url: `file:///${filePath.replace(/\\/g, "/")}`,
-      filename,
-      filePath,
-      fileSize: stats.size,
-    });
-    ctx.jobRepo.saveContext(jobId, {
-      jobId,
-      url: `file:///${filePath.replace(/\\/g, "/")}`,
-      deviceId: device?.id,
-      deviceSerial: device?.serial,
-      downloadId,
-      downloadPath: filePath,
-      filename,
-      fileSize: stats.size,
-    });
-    ctx.jobRepo.updateProgress(jobId, 0, "validate_package");
-    ctx.eventBus.job(jobId, "info", `Installing ${filename} from disk`);
+    const { jobId, filename } = queueLocalInstall(
+      ctx,
+      picked.filePaths[0],
+      deviceSerial,
+    );
     ctx.jobRunner.processNext();
     return { cancelled: false, jobId, filename };
   });
+
+  handle(
+    "job:createFromPaths",
+    async (paths: string[], deviceSerial?: string) => {
+      const installable = (paths ?? []).filter((p) =>
+        /\.(apk|xapk|apks|apkm)$/i.test(p),
+      );
+      if (installable.length === 0) {
+        throw new Error("None of the dropped files are Android packages.");
+      }
+
+      let queued = 0;
+      for (const filePath of installable) {
+        try {
+          queueLocalInstall(ctx, filePath, deviceSerial);
+          queued += 1;
+        } catch (error) {
+          ctx.eventBus.log(
+            "job-manager",
+            "warn",
+            `Skipped ${basename(filePath)}: ${
+              error instanceof Error ? error.message : "unreadable"
+            }`,
+          );
+        }
+      }
+
+      ctx.jobRunner.processNext();
+      return { queued, skipped: paths.length - queued };
+    },
+  );
+
   handle("job:getAll", () => ctx.jobRepo.findAll());
   handle("job:getById", (id: string) => ctx.jobRepo.findById(id));
   handle("job:cancel", (id: string) => ctx.jobRunner.cancelJob(id));

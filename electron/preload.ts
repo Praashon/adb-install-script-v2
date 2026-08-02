@@ -1,4 +1,9 @@
-import { contextBridge, ipcRenderer, IpcRendererEvent } from "electron";
+import {
+  contextBridge,
+  ipcRenderer,
+  webUtils,
+  IpcRendererEvent,
+} from "electron";
 export interface AdbStatus {
   available: boolean;
   version: string | null;
@@ -66,6 +71,10 @@ export interface ElectronAPI {
       jobId?: string;
       filename?: string;
     }>;
+    createFromPaths(
+      paths: string[],
+      deviceSerial?: string,
+    ): Promise<{ queued: number; skipped: number }>;
     getAll(): Promise<unknown[]>;
     getById(id: string): Promise<unknown>;
     cancel(id: string): Promise<void>;
@@ -196,6 +205,7 @@ export interface ElectronAPI {
     openExternal(url: string): Promise<void>;
     getInfo(): Promise<AppInfo>;
   };
+  getPathForFile(file: File): string;
   onEvent(callback: (event: string, data: unknown) => void): () => void;
 }
 const api: ElectronAPI = {
@@ -211,6 +221,8 @@ const api: ElectronAPI = {
     createDownload: (url) => ipcRenderer.invoke("job:createDownload", url),
     createFromFile: (deviceSerial) =>
       ipcRenderer.invoke("job:createFromFile", deviceSerial),
+    createFromPaths: (paths, deviceSerial) =>
+      ipcRenderer.invoke("job:createFromPaths", paths, deviceSerial),
     getAll: () => ipcRenderer.invoke("job:getAll"),
     getById: (id) => ipcRenderer.invoke("job:getById", id),
     cancel: (id) => ipcRenderer.invoke("job:cancel", id),
@@ -302,6 +314,7 @@ const api: ElectronAPI = {
     openExternal: (url) => ipcRenderer.invoke("app:openExternal", url),
     getInfo: () => ipcRenderer.invoke("app:getInfo"),
   },
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   onEvent(callback) {
     const handler = (
       _event: IpcRendererEvent,

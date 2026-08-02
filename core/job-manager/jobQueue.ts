@@ -102,7 +102,7 @@ export class JobQueue {
       jobId,
       "info",
       hasLocalFile
-        ? "Job requeued — reusing the downloaded file"
+        ? "Job requeued, reusing the downloaded file"
         : "Job requeued for retry",
     );
   }

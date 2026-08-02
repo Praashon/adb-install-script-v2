@@ -177,7 +177,7 @@ export class Installer {
       INSTALL_FAILED_USER_RESTRICTED:
         'The device blocked the install. Accept the prompt on your device or enable "Install via USB".',
       INSTALL_FAILED_MISSING_SPLIT:
-        "Missing split APKs — install the full bundle instead.",
+        "Missing split APKs, install the full bundle instead.",
       INSTALL_FAILED_VERIFICATION_FAILURE:
         'Play Protect blocked the install. Disable "Verify apps over USB" on the device.',
     };

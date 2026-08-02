@@ -44,6 +44,8 @@ export const jobService = {
   createDownload: (url: string) => call(() => api().jobs.createDownload(url)),
   createFromFile: (deviceSerial?: string) =>
     call(() => api().jobs.createFromFile(deviceSerial)),
+  createFromPaths: (paths: string[], deviceSerial?: string) =>
+    call(() => api().jobs.createFromPaths(paths, deviceSerial)),
   getAll: () => call(() => api().jobs.getAll() as Promise<Job[]>),
   getById: (id: string) =>
     call(() => api().jobs.getById(id) as Promise<Job | undefined>),

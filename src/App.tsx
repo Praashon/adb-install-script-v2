@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Sidebar } from "@/components/Sidebar";
 import { TitleBar } from "@/components/TitleBar";
 import { Toasts } from "@/components/Toasts";
+import { DropZone } from "@/components/DropZone";
 import { useEventBridge } from "@/hooks/useEventBridge";
 import { useEnterAnimation } from "@/hooks/useEnterAnimation";
 import { useAppStore } from "@/stores/appStore";
@@ -67,6 +68,7 @@ export function App() {
           <Shell />
         </div>
         <Toasts />
+        <DropZone />
       </div>
     </HashRouter>
   );
