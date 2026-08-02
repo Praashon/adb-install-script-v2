@@ -25,6 +25,8 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: ADB APK Installer Pro
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
 extraResources:
   - from: sources/plugins
     to: sources/plugins

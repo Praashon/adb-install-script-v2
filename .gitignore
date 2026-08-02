@@ -41,4 +41,4 @@ Thumbs.db
 
 coverage/
 .nyc_output/
-electron.vite.config.1785645545808.mjs
+electron.vite.config.*.mjs
