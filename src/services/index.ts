@@ -110,6 +110,14 @@ export const deviceService = {
   recordStop: (serial: string) => call(() => api().devices.recordStop(serial)),
   recordStatus: (serial: string) =>
     call(() => api().devices.recordStatus(serial)),
+  getPermissions: (serial: string, packageName: string) =>
+    call(() => api().devices.getPermissions(serial, packageName)),
+  setPermission: (
+    serial: string,
+    packageName: string,
+    permission: string,
+    grant: boolean,
+  ) => call(() => api().devices.setPermission(serial, packageName, permission, grant)),
   pair: (address: string, code: string) =>
     call(() => api().devices.pair(address, code)),
   connect: (address: string) => call(() => api().devices.connect(address)),

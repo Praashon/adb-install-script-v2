@@ -548,6 +548,37 @@ function registerDeviceHandlers(ctx: AppContext): void {
     return { recording: isRecording(serial) };
   });
 
+  handle(
+    "device:getPermissions",
+    async (serial: string, packageName: string) => {
+      const adb = ctx.createAdbManager();
+      return adb.getAppPermissions(packageName, serial);
+    },
+  );
+
+  handle(
+    "device:setPermission",
+    async (
+      serial: string,
+      packageName: string,
+      permission: string,
+      grant: boolean,
+    ) => {
+      const adb = ctx.createAdbManager();
+      if (grant) {
+        await adb.grantPermission(packageName, permission, serial);
+      } else {
+        await adb.revokePermission(packageName, permission, serial);
+      }
+      ctx.eventBus.adb(
+        "info",
+        `${grant ? "Granted" : "Revoked"} ${permission} for ${packageName}`,
+        { serial },
+      );
+      return { granted: grant };
+    },
+  );
+
   handle("device:pair", async (address: string, code: string) => {
     const adb = ctx.createAdbManager();
     const result = await adb.pair(address.trim(), code.trim());

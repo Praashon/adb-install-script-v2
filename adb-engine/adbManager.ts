@@ -21,12 +21,95 @@ export interface InstalledPackage {
   versionName?: string;
   isSystem: boolean;
 }
+export interface AppPermission {
+  permission: string;
+  granted: boolean;
+  special: boolean;
+}
+const SPECIAL_PERMISSIONS = [
+  "android.permission.WRITE_SECURE_SETTINGS",
+  "android.permission.WRITE_SETTINGS",
+  "android.permission.DUMP",
+  "android.permission.READ_LOGS",
+  "android.permission.PACKAGE_USAGE_STATS",
+  "android.permission.BATTERY_STATS",
+  "android.permission.CHANGE_CONFIGURATION",
+  "android.permission.GET_APP_OPS_STATS",
+  "android.permission.PROJECT_MEDIA",
+];
+export function parseAppPermissions(dump: string): AppPermission[] {
+  const runtime = new Map<string, boolean>();
+  const granted = new Map<string, boolean>();
+  const requested = new Set<string>();
+
+  let inRuntime = false;
+  let inRequested = false;
+
+  for (const raw of dump.split("\n")) {
+    const trimmed = raw.trim();
+
+    if (/^runtime permissions:/i.test(trimmed)) {
+      inRuntime = true;
+      inRequested = false;
+      continue;
+    }
+    if (/^requested permissions:/i.test(trimmed)) {
+      inRequested = true;
+      inRuntime = false;
+      continue;
+    }
+
+    const grantMatch = trimmed.match(
+      /^([\w.]+):\s*granted=(true|false)/,
+    );
+    if (grantMatch) {
+      granted.set(grantMatch[1], grantMatch[2] === "true");
+      if (inRuntime) runtime.set(grantMatch[1], grantMatch[2] === "true");
+      continue;
+    }
+
+    if (inRequested) {
+      const reqMatch = trimmed.match(/^([\w.]+\.permission\.[\w]+)$/);
+      if (reqMatch) {
+        requested.add(reqMatch[1]);
+        continue;
+      }
+    }
+
+    if (trimmed.endsWith(":") && !/permission/i.test(trimmed)) {
+      inRuntime = false;
+      inRequested = false;
+    }
+  }
+
+  const result: AppPermission[] = [];
+  const seen = new Set<string>();
+
+  for (const perm of SPECIAL_PERMISSIONS) {
+    if (requested.has(perm) || granted.has(perm)) {
+      result.push({ permission: perm, granted: granted.get(perm) ?? false, special: true });
+      seen.add(perm);
+    }
+  }
+
+  for (const [perm, isGranted] of runtime) {
+    if (seen.has(perm)) continue;
+    result.push({ permission: perm, granted: isGranted, special: false });
+    seen.add(perm);
+  }
+
+  return result.sort(
+    (a, b) =>
+      Number(b.special) - Number(a.special) ||
+      a.permission.localeCompare(b.permission),
+  );
+}
 export function describePackageFailure(output: string): string {
   const thrown = output
     .match(/^[\w.$]+(?:Exception|Error):\s*(.+)$/m)?.[1]
     ?.trim();
   if (thrown && /no root permission/i.test(thrown)) {
-    return "This package is locked by the manufacturer and can only be changed with root. ADB cannot do it — and neither can Shizuku-based tools such as Canta, because they run with the same shell permissions.";
+    return "This package is locked by the manufacturer and can only be changed with root. ADB cannot do it, and neither can Shizuku-based tools such as Canta, because they run with the same shell permissions.";
   }
   if (/DELETE_FAILED_INTERNAL_ERROR/i.test(output)) {
     return "Android refused to remove this app. It is part of the system image.";
@@ -201,6 +284,36 @@ export class AdbManager {
       this.adbPath,
       ["-s", serial, "pull", devicePath, localPath],
       { timeout: 300000, windowsHide: true, maxBuffer: 1024 * 1024 * 16 },
+    );
+  }
+  async getAppPermissions(
+    packageName: string,
+    serial: string,
+  ): Promise<AppPermission[]> {
+    const { stdout } = await this.exec(
+      ["-s", serial, "shell", "dumpsys", "package", packageName],
+      30000,
+    );
+    return parseAppPermissions(stdout);
+  }
+  async grantPermission(
+    packageName: string,
+    permission: string,
+    serial: string,
+  ): Promise<void> {
+    await this.exec(
+      ["-s", serial, "shell", "pm", "grant", packageName, permission],
+      20000,
+    );
+  }
+  async revokePermission(
+    packageName: string,
+    permission: string,
+    serial: string,
+  ): Promise<void> {
+    await this.exec(
+      ["-s", serial, "shell", "pm", "revoke", packageName, permission],
+      20000,
     );
   }
   async uninstall(
@@ -422,6 +535,7 @@ export class AdbManager {
   private async exec(
     args: string[],
     timeout = 30000,
+    maxBuffer = 1024 * 1024 * 8,
   ): Promise<{
     stdout: string;
     stderr: string;
@@ -429,6 +543,7 @@ export class AdbManager {
     try {
       return await execFileAsync(this.adbPath, args, {
         timeout,
+        maxBuffer,
         windowsHide: true,
       });
     } catch (error) {

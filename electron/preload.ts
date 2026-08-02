@@ -46,6 +46,11 @@ export interface BloatScanResult {
   catalogSize: number;
 }
 export type RemovalMode = "full" | "user" | "disabled";
+export interface AppPermission {
+  permission: string;
+  granted: boolean;
+  special: boolean;
+}
 export interface ElectronAPI {
   window: {
     minimize(): void;
@@ -141,6 +146,16 @@ export interface ElectronAPI {
     recordStart(serial: string): Promise<{ recording: boolean }>;
     recordStop(serial: string): Promise<{ path: string }>;
     recordStatus(serial: string): Promise<{ recording: boolean }>;
+    getPermissions(
+      serial: string,
+      packageName: string,
+    ): Promise<AppPermission[]>;
+    setPermission(
+      serial: string,
+      packageName: string,
+      permission: string,
+      grant: boolean,
+    ): Promise<{ granted: boolean }>;
     pair(
       address: string,
       code: string,
@@ -241,6 +256,16 @@ const api: ElectronAPI = {
     recordStart: (serial) => ipcRenderer.invoke("device:recordStart", serial),
     recordStop: (serial) => ipcRenderer.invoke("device:recordStop", serial),
     recordStatus: (serial) => ipcRenderer.invoke("device:recordStatus", serial),
+    getPermissions: (serial, packageName) =>
+      ipcRenderer.invoke("device:getPermissions", serial, packageName),
+    setPermission: (serial, packageName, permission, grant) =>
+      ipcRenderer.invoke(
+        "device:setPermission",
+        serial,
+        packageName,
+        permission,
+        grant,
+      ),
     pair: (address, code) => ipcRenderer.invoke("device:pair", address, code),
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),

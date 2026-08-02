@@ -9,15 +9,18 @@ import {
   Package,
   Trash2,
   FileDown,
+  KeyRound,
   Camera,
   Video,
   Square,
   Search,
   AlertTriangle,
+  ShieldAlert,
   BatteryMedium,
   HardDrive,
   Cpu,
 } from "lucide-react";
+import type { AppPermission } from "../../electron/preload";
 import { deviceService } from "@/services";
 import { useAppStore, notify } from "@/stores/appStore";
 import { Modal, ConfirmDialog } from "@/components/Modal";
@@ -563,6 +566,7 @@ function InstalledAppsModal({
   const [pendingUninstall, setPendingUninstall] = useState<string | null>(null);
   const [isUninstalling, setIsUninstalling] = useState(false);
   const [extracting, setExtracting] = useState<string | null>(null);
+  const [permApp, setPermApp] = useState<string | null>(null);
   const [blockedPackage, setBlockedPackage] = useState<{
     name: string;
     reason: string;
@@ -751,6 +755,13 @@ function InstalledAppsModal({
                 </div>
                 <button
                   className="btn-icon shrink-0"
+                  onClick={() => setPermApp(pkg.packageName)}
+                  title="Manage permissions"
+                >
+                  <KeyRound className="w-4 h-4" />
+                </button>
+                <button
+                  className="btn-icon shrink-0"
                   onClick={() => void extract(pkg.packageName)}
                   disabled={extracting === pkg.packageName}
                   title="Extract APK to PC"
@@ -796,7 +807,220 @@ function InstalledAppsModal({
         onConfirm={() => void disableBlocked()}
         onCancel={() => setBlockedPackage(null)}
       />
+
+      <PermissionsModal
+        device={device}
+        packageName={permApp}
+        onClose={() => setPermApp(null)}
+      />
     </>
+  );
+}
+
+const PERMISSION_LABELS: Record<string, string> = {
+  "android.permission.WRITE_SECURE_SETTINGS": "Write secure settings",
+  "android.permission.WRITE_SETTINGS": "Modify system settings",
+  "android.permission.DUMP": "Read system diagnostics",
+  "android.permission.READ_LOGS": "Read system logs",
+  "android.permission.PACKAGE_USAGE_STATS": "Usage access",
+  "android.permission.BATTERY_STATS": "Battery statistics",
+  "android.permission.CHANGE_CONFIGURATION": "Change configuration",
+  "android.permission.GET_APP_OPS_STATS": "App-ops statistics",
+  "android.permission.PROJECT_MEDIA": "Screen capture",
+  "android.permission.CAMERA": "Camera",
+  "android.permission.RECORD_AUDIO": "Microphone",
+  "android.permission.ACCESS_FINE_LOCATION": "Precise location",
+  "android.permission.ACCESS_COARSE_LOCATION": "Approximate location",
+  "android.permission.ACCESS_BACKGROUND_LOCATION": "Background location",
+  "android.permission.READ_CONTACTS": "Read contacts",
+  "android.permission.WRITE_CONTACTS": "Modify contacts",
+  "android.permission.READ_SMS": "Read SMS",
+  "android.permission.SEND_SMS": "Send SMS",
+  "android.permission.READ_CALL_LOG": "Read call log",
+  "android.permission.READ_PHONE_STATE": "Phone state",
+  "android.permission.READ_EXTERNAL_STORAGE": "Read storage",
+  "android.permission.WRITE_EXTERNAL_STORAGE": "Write storage",
+  "android.permission.READ_MEDIA_IMAGES": "Read photos",
+  "android.permission.READ_MEDIA_VIDEO": "Read videos",
+  "android.permission.READ_MEDIA_AUDIO": "Read audio",
+  "android.permission.POST_NOTIFICATIONS": "Post notifications",
+  "android.permission.BODY_SENSORS": "Body sensors",
+  "android.permission.ACTIVITY_RECOGNITION": "Physical activity",
+};
+
+function labelForPermission(permission: string): string {
+  if (PERMISSION_LABELS[permission]) return PERMISSION_LABELS[permission];
+  const tail = permission.split(".").pop() ?? permission;
+  return tail
+    .toLowerCase()
+    .split("_")
+    .map((word, i) => (i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(" ");
+}
+
+function PermissionsModal({
+  device,
+  packageName,
+  onClose,
+}: {
+  device: Device | null;
+  packageName: string | null;
+  onClose: () => void;
+}) {
+  const [permissions, setPermissions] = useState<AppPermission[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!device || !packageName) {
+      setPermissions([]);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    deviceService
+      .getPermissions(device.serial, packageName)
+      .then((result) => {
+        if (!cancelled) setPermissions(result);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          notify.error(
+            "Could not read permissions",
+            error instanceof Error ? error.message : undefined,
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [device, packageName]);
+
+  const toggle = async (perm: AppPermission): Promise<void> => {
+    if (!device || !packageName) return;
+    const next = !perm.granted;
+    setBusy(perm.permission);
+    try {
+      await deviceService.setPermission(
+        device.serial,
+        packageName,
+        perm.permission,
+        next,
+      );
+      setPermissions((prev) =>
+        prev.map((p) =>
+          p.permission === perm.permission ? { ...p, granted: next } : p,
+        ),
+      );
+    } catch (error) {
+      notify.error(
+        next ? "Could not grant" : "Could not revoke",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const special = permissions.filter((p) => p.special);
+  const runtime = permissions.filter((p) => !p.special);
+
+  return (
+    <Modal
+      open={Boolean(packageName)}
+      title="Permissions"
+      description={packageName ?? ""}
+      onClose={onClose}
+    >
+      {isLoading ? (
+        <p className="text-sm text-ink-3 py-8 text-center">
+          Reading permissions from device…
+        </p>
+      ) : permissions.length === 0 ? (
+        <p className="text-sm text-ink-3 py-8 text-center">
+          No ADB-manageable permissions for this app.
+        </p>
+      ) : (
+        <div className="space-y-5">
+          {special.length > 0 && (
+            <section>
+              <h3 className="eyebrow mb-2 flex items-center gap-2">
+                <ShieldAlert className="w-3.5 h-3.5 text-caution" />
+                Special access
+              </h3>
+              <ul className="panel divide-y divide-line overflow-hidden">
+                {special.map((perm) => (
+                  <PermissionRow
+                    key={perm.permission}
+                    perm={perm}
+                    busy={busy === perm.permission}
+                    onToggle={() => void toggle(perm)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {runtime.length > 0 && (
+            <section>
+              <h3 className="eyebrow mb-2">Runtime permissions</h3>
+              <ul className="panel divide-y divide-line overflow-hidden">
+                {runtime.map((perm) => (
+                  <PermissionRow
+                    key={perm.permission}
+                    perm={perm}
+                    busy={busy === perm.permission}
+                    onToggle={() => void toggle(perm)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function PermissionRow({
+  perm,
+  busy,
+  onToggle,
+}: {
+  perm: AppPermission;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-3 px-4 py-2.5">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-ink">{labelForPermission(perm.permission)}</p>
+        <p className="font-mono text-[11px] text-ink-3 truncate selectable">
+          {perm.permission}
+        </p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={perm.granted}
+        aria-label={`${perm.granted ? "Revoke" : "Grant"} ${perm.permission}`}
+        disabled={busy}
+        onClick={onToggle}
+        className={cn(
+          "relative w-9 h-5 rounded-full shrink-0 transition-colors disabled:opacity-50",
+          perm.granted ? "bg-verify" : "bg-line-strong",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform",
+            perm.granted && "translate-x-4",
+          )}
+        />
+      </button>
+    </li>
   );
 }
 function WifiConnectModal({
