@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow, shell, dialog, app } from "electron";
-import { readFileSync } from "fs";
+import { readFileSync, mkdirSync } from "fs";
 import { unlink } from "fs/promises";
-import { basename } from "path";
+import { basename, join } from "path";
 import { AppContext } from "./appContext";
 import { AdapterRules } from "@security-engine/adapterValidator";
 import { SourceDetector } from "@source-engine/sourceDetector";
@@ -469,6 +469,40 @@ function registerDeviceHandlers(ctx: AppContext): void {
       return { success: true, mode: result.mode };
     },
   );
+
+  handle("device:extractApp", async (serial: string, packageName: string) => {
+    const adb = ctx.createAdbManager();
+    const paths = await adb.getPackagePaths(packageName, serial);
+    if (paths.length === 0) {
+      throw new Error(`Could not locate ${packageName} on the device`);
+    }
+
+    const picked = await openDialog({
+      title: "Choose where to save the APK",
+      defaultPath: ctx.getSettings().downloadDirectory,
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return { cancelled: true };
+    }
+
+    const safeName = packageName.replace(/[^a-z0-9._-]+/gi, "_");
+    const dest = join(picked.filePaths[0], safeName);
+    mkdirSync(dest, { recursive: true });
+
+    let pulled = 0;
+    for (const devicePath of paths) {
+      await adb.pullFile(devicePath, join(dest, basename(devicePath)), serial);
+      pulled += 1;
+    }
+
+    ctx.eventBus.adb("info", `Extracted ${packageName} (${pulled} file(s))`, {
+      serial,
+      folder: dest,
+    });
+    shell.showItemInFolder(join(dest, basename(paths[0])));
+    return { cancelled: false, folder: dest, files: pulled };
+  });
 
   handle("device:connect", async (address: string) => {
     const adb = ctx.createAdbManager();

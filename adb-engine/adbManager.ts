@@ -177,6 +177,32 @@ export class AdbManager {
       .filter((pkg) => pkg.packageName.length > 0)
       .sort((a, b) => a.packageName.localeCompare(b.packageName));
   }
+  async getPackagePaths(
+    packageName: string,
+    serial: string,
+  ): Promise<string[]> {
+    const { stdout } = await this.exec(
+      ["-s", serial, "shell", "pm", "path", packageName],
+      30000,
+    );
+    return stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("package:"))
+      .map((line) => line.replace("package:", "").trim())
+      .filter((path) => path.length > 0);
+  }
+  async pullFile(
+    devicePath: string,
+    localPath: string,
+    serial: string,
+  ): Promise<void> {
+    await execFileAsync(
+      this.adbPath,
+      ["-s", serial, "pull", devicePath, localPath],
+      { timeout: 300000, windowsHide: true, maxBuffer: 1024 * 1024 * 16 },
+    );
+  }
   async uninstall(
     packageName: string,
     serial: string,

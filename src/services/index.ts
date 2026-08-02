@@ -103,6 +103,8 @@ export const deviceService = {
   scanBloat: (serial: string) => call(() => api().devices.scanBloat(serial)),
   removeBloat: (serial: string, packageName: string) =>
     call(() => api().devices.removeBloat(serial, packageName)),
+  extractApp: (serial: string, packageName: string) =>
+    call(() => api().devices.extractApp(serial, packageName)),
   connect: (address: string) => call(() => api().devices.connect(address)),
   disconnect: (address: string) =>
     call(() => api().devices.disconnect(address)),

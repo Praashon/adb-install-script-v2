@@ -129,6 +129,14 @@ export interface ElectronAPI {
       success: boolean;
       mode: RemovalMode;
     }>;
+    extractApp(
+      serial: string,
+      packageName: string,
+    ): Promise<{
+      cancelled: boolean;
+      folder?: string;
+      files?: number;
+    }>;
     connect(address: string): Promise<{
       success: boolean;
       message: string;
@@ -216,6 +224,8 @@ const api: ElectronAPI = {
     scanBloat: (serial) => ipcRenderer.invoke("device:scanBloat", serial),
     removeBloat: (serial, packageName) =>
       ipcRenderer.invoke("device:removeBloat", serial, packageName),
+    extractApp: (serial, packageName) =>
+      ipcRenderer.invoke("device:extractApp", serial, packageName),
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),
     adbStatus: () => ipcRenderer.invoke("device:adbStatus"),

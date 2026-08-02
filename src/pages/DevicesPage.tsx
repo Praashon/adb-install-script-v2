@@ -8,6 +8,7 @@ import {
   Wifi,
   Package,
   Trash2,
+  FileDown,
   Search,
   AlertTriangle,
   BatteryMedium,
@@ -449,6 +450,7 @@ function InstalledAppsModal({
   const [includeSystem, setIncludeSystem] = useState(false);
   const [pendingUninstall, setPendingUninstall] = useState<string | null>(null);
   const [isUninstalling, setIsUninstalling] = useState(false);
+  const [extracting, setExtracting] = useState<string | null>(null);
   const [blockedPackage, setBlockedPackage] = useState<{
     name: string;
     reason: string;
@@ -488,6 +490,26 @@ function InstalledAppsModal({
       pkg.packageName.toLowerCase().includes(needle),
     );
   }, [packages, query]);
+  const extract = async (packageName: string): Promise<void> => {
+    if (!device) return;
+    setExtracting(packageName);
+    try {
+      const result = await deviceService.extractApp(device.serial, packageName);
+      if (!result.cancelled) {
+        notify.success(
+          "APK extracted",
+          `${result.files} file(s) saved to ${result.folder}`,
+        );
+      }
+    } catch (error) {
+      notify.error(
+        "Extract failed",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setExtracting(null);
+    }
+  };
   const uninstall = async (): Promise<void> => {
     if (!device || !pendingUninstall) return;
     setIsUninstalling(true);
@@ -615,6 +637,19 @@ function InstalledAppsModal({
                     </p>
                   )}
                 </div>
+                <button
+                  className="btn-icon shrink-0"
+                  onClick={() => void extract(pkg.packageName)}
+                  disabled={extracting === pkg.packageName}
+                  title="Extract APK to PC"
+                >
+                  <FileDown
+                    className={cn(
+                      "w-4 h-4",
+                      extracting === pkg.packageName && "animate-pulse",
+                    )}
+                  />
+                </button>
                 <button
                   className="btn-icon hover:text-fault hover:bg-fault/10 shrink-0"
                   onClick={() => setPendingUninstall(pkg.packageName)}
