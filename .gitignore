@@ -9,6 +9,7 @@ storage/cache/
 storage/logs/
 
 .env
+.claude
 .env.local
 .env.*.local
 *.log
@@ -22,6 +23,7 @@ npm-debug.log*
 *.db
 *.sqlite
 *.sqlite3
+.future-updates.md
 
 .DS_Store
 Thumbs.db
@@ -39,4 +41,4 @@ Thumbs.db
 
 coverage/
 .nyc_output/
-.claude
+electron.vite.config.1785645545808.mjs

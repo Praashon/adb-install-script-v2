@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Device, Job, Source } from "@/types";
+import { applyTheme, type Theme } from "@/lib/theme";
 export type ToastKind = "success" | "error" | "info" | "warning";
 export interface Toast {
   id: number;
@@ -24,6 +25,8 @@ interface AppState {
   adbAvailable: boolean;
   adbError: string | null;
   activeJobId: string | null;
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
   setDevices: (devices: Device[]) => void;
   setSources: (sources: Source[]) => void;
   setJobs: (jobs: Job[]) => void;
@@ -49,6 +52,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   adbAvailable: true,
   adbError: null,
   activeJobId: null,
+  theme: "dark",
+  setTheme: (theme) => {
+    applyTheme(theme);
+    set({ theme });
+  },
   setDevices: (devices) => set({ devices }),
   setSources: (sources) => set({ sources }),
   setJobs: (jobs) => set({ jobs }),

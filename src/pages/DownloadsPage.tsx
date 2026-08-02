@@ -17,6 +17,7 @@ import {
 import { downloadService, jobService } from "@/services";
 import { useAppStore, notify } from "@/stores/appStore";
 import { Modal, ConfirmDialog } from "@/components/Modal";
+import { PipelineRail } from "@/components/PipelineRail";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 import { STEP_LABELS, type Download, type Job, type LogEntry } from "@/types";
 export function DownloadsPage() {
@@ -135,15 +136,15 @@ export function DownloadsPage() {
     <div className="max-w-5xl mx-auto py-6">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 mb-1">
+          <h1 className="text-2xl font-bold text-ink mb-1">
             Downloads &amp; Jobs
           </h1>
-          <p className="text-slate-400">
+          <p className="text-ink-2">
             Monitor active downloads and installation progress
           </p>
         </div>
         <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
           <input
             type="text"
             className="input pl-9 w-64"
@@ -159,12 +160,12 @@ export function DownloadsPage() {
         <section>
           <h2 className="section-title flex items-center gap-2">
             Active Tasks
-            <span className="badge-accent">{activeJobs.length}</span>
+            <span className="badge-signal">{activeJobs.length}</span>
           </h2>
 
           <div className="space-y-4">
             {activeJobs.length === 0 ? (
-              <div className="card text-center py-8 text-slate-500 border-dashed">
+              <div className="card text-center py-8 text-ink-3 border-dashed">
                 No active tasks
               </div>
             ) : (
@@ -186,7 +187,7 @@ export function DownloadsPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="section-title mb-0 flex items-center gap-2">
                 Needs attention
-                <span className="badge-danger">{finishedJobs.length}</span>
+                <span className="badge-fault">{finishedJobs.length}</span>
               </h2>
               <button
                 className="btn-ghost text-xs py-1.5"
@@ -225,10 +226,10 @@ export function DownloadsPage() {
             )}
           </div>
 
-          <div className="card p-0 overflow-hidden border-white/[0.04]">
+          <div className="card p-0 overflow-hidden border-line">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-500 uppercase bg-surface-400/50 border-b border-white/[0.04]">
+                <thead className="text-xs text-ink-3 uppercase bg-inset border-b border-line">
                   <tr>
                     <th className="px-6 py-4 font-medium">File</th>
                     <th className="px-6 py-4 font-medium">Size</th>
@@ -239,12 +240,12 @@ export function DownloadsPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-line">
                   {filteredDownloads.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}
-                        className="px-6 py-8 text-center text-slate-500"
+                        className="px-6 py-8 text-center text-ink-3"
                       >
                         {downloads.length === 0
                           ? "No downloaded files yet"
@@ -255,14 +256,14 @@ export function DownloadsPage() {
                     filteredDownloads.map((download) => (
                       <tr
                         key={download.id}
-                        className="hover:bg-white/[0.02] transition-colors"
+                        className="hover:bg-inset transition-colors"
                       >
-                        <td className="px-6 py-4 font-medium text-slate-300 max-w-xs">
+                        <td className="px-6 py-4 font-medium text-ink-2 max-w-xs">
                           <div className="truncate" title={download.filename}>
                             {download.filename}
                           </div>
                           {download.packageName && (
-                            <div className="text-xs text-slate-500 font-mono truncate mt-0.5">
+                            <div className="text-xs text-ink-3 font-mono truncate mt-0.5">
                               {download.packageName}
                               {download.versionName
                                 ? ` · v${download.versionName}`
@@ -270,12 +271,12 @@ export function DownloadsPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
+                        <td className="px-6 py-4 text-ink-3 whitespace-nowrap">
                           {download.fileSize
                             ? formatBytes(download.fileSize)
                             : "-"}
                         </td>
-                        <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
+                        <td className="px-6 py-4 text-ink-3 whitespace-nowrap">
                           {formatDate(download.createdAt)}
                         </td>
                         <td className="px-6 py-4">
@@ -313,7 +314,7 @@ export function DownloadsPage() {
                             <Folder className="w-4 h-4" />
                           </button>
                           <button
-                            className="btn-icon hover:text-danger hover:bg-danger/10"
+                            className="btn-icon hover:text-fault hover:bg-fault/10"
                             onClick={() => setPendingDelete(download)}
                             title="Delete file"
                           >
@@ -369,10 +370,10 @@ export function DownloadsPage() {
 }
 function StatusBadge({ status }: { status: Download["status"] }) {
   if (status === "completed")
-    return <span className="badge-success">Completed</span>;
-  if (status === "failed") return <span className="badge-danger">Failed</span>;
+    return <span className="badge-verify">Completed</span>;
+  if (status === "failed") return <span className="badge-fault">Failed</span>;
   if (status === "downloading")
-    return <span className="badge-accent">Downloading</span>;
+    return <span className="badge-signal">Downloading</span>;
   return <span className="badge-neutral">{status}</span>;
 }
 function ActiveJobCard({
@@ -388,25 +389,25 @@ function ActiveJobCard({
 }) {
   const stepLabel = STEP_LABELS[job.currentStep ?? ""] ?? "Starting…";
   return (
-    <div className="card relative overflow-hidden animate-slide-up border-accent/20">
+    <div className="card relative overflow-hidden will-enter border-signal/20">
       <div className="flex justify-between items-start gap-4 mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded bg-accent/10 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded bg-signal/10 flex items-center justify-center shrink-0">
             <RefreshCw
               className={cn(
-                "w-5 h-5 text-accent",
+                "w-5 h-5 text-signal",
                 job.status === "running" && "animate-spin",
               )}
             />
           </div>
           <div className="min-w-0">
             <h3
-              className="font-semibold text-slate-200 truncate"
+              className="font-semibold text-ink truncate"
               title={job.url}
             >
               {job.url}
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ink-2">
               {job.status === "paused" ? "Paused" : stepLabel}
             </p>
           </div>
@@ -428,7 +429,7 @@ function ActiveJobCard({
             )}
           </button>
           <button
-            className="btn-icon hover:text-danger hover:bg-danger/10"
+            className="btn-icon hover:text-fault hover:bg-fault/10"
             onClick={onCancel}
             title="Cancel"
           >
@@ -437,15 +438,13 @@ function ActiveJobCard({
         </div>
       </div>
 
-      <div className="progress-bar mt-4">
-        <div
-          className="progress-bar-fill"
-          style={{ width: `${Math.max(2, job.progress)}%` }}
+      <div className="mt-4">
+        <PipelineRail
+          type={job.type}
+          currentStep={job.currentStep}
+          progress={job.progress}
+          status={job.status}
         />
-      </div>
-      <div className="flex justify-between text-xs mt-2 text-slate-500">
-        <span>{job.status.toUpperCase()}</span>
-        <span>{Math.round(job.progress)}%</span>
       </div>
     </div>
   );
@@ -466,7 +465,7 @@ function FailedJobCard({
     <div
       className={cn(
         "card py-4",
-        cancelled ? "border-white/[0.06]" : "border-danger/20 bg-danger/[0.03]",
+        cancelled ? "border-line" : "border-fault/20 bg-fault/[0.03]",
       )}
     >
       <div className="flex items-start justify-between gap-4">
@@ -474,17 +473,17 @@ function FailedJobCard({
           <AlertCircle
             className={cn(
               "w-5 h-5 mt-0.5 shrink-0",
-              cancelled ? "text-slate-500" : "text-danger-light",
+              cancelled ? "text-ink-3" : "text-fault",
             )}
           />
           <div className="min-w-0">
             <p
-              className="text-sm font-medium text-slate-200 truncate"
+              className="text-sm font-medium text-ink truncate"
               title={job.url}
             >
               {job.url}
             </p>
-            <p className="text-xs text-slate-400 mt-1 break-words selectable">
+            <p className="text-xs text-ink-2 mt-1 break-words selectable">
               {cancelled ? "Cancelled" : job.error || "Failed"}
             </p>
           </div>
@@ -498,7 +497,7 @@ function FailedJobCard({
             <RotateCcw className="w-4 h-4" />
           </button>
           <button
-            className="btn-icon hover:text-danger hover:bg-danger/10"
+            className="btn-icon hover:text-fault hover:bg-fault/10"
             onClick={onRemove}
             title="Remove"
           >
@@ -510,10 +509,10 @@ function FailedJobCard({
   );
 }
 const LOG_TONES: Record<string, string> = {
-  error: "border-danger text-danger-light bg-danger/[0.05]",
-  warn: "border-warning text-warning-light bg-warning/[0.05]",
-  info: "border-accent/40 text-slate-300",
-  debug: "border-white/10 text-slate-500",
+  error: "border-fault text-fault bg-fault/[0.05]",
+  warn: "border-caution text-caution bg-caution/[0.05]",
+  info: "border-signal/40 text-ink-2",
+  debug: "border-white/10 text-ink-3",
 };
 function JobLogModal({
   job,
@@ -564,23 +563,23 @@ function JobLogModal({
       }
     >
       {job?.status === "completed" && (
-        <div className="flex items-center gap-2 text-sm text-success-light mb-4">
+        <div className="flex items-center gap-2 text-sm text-verify mb-4">
           <CheckCircle2 className="w-4 h-4" />
           Completed successfully
         </div>
       )}
       {job?.error && (
-        <div className="rounded-lg border border-danger/30 bg-danger/[0.06] p-3 mb-4">
-          <p className="text-sm text-danger-light break-words selectable">
+        <div className="rounded-lg border border-fault/30 bg-fault/[0.06] p-3 mb-4">
+          <p className="text-sm text-fault break-words selectable">
             {job.error}
           </p>
         </div>
       )}
 
       {isLoading && logs.length === 0 ? (
-        <p className="text-sm text-slate-500 py-8 text-center">Loading log…</p>
+        <p className="text-sm text-ink-3 py-8 text-center">Loading log…</p>
       ) : logs.length === 0 ? (
-        <p className="text-sm text-slate-500 py-8 text-center">
+        <p className="text-sm text-ink-3 py-8 text-center">
           No log entries for this job
         </p>
       ) : (
@@ -593,7 +592,7 @@ function JobLogModal({
                 LOG_TONES[entry.level] ?? LOG_TONES.info,
               )}
             >
-              <span className="text-slate-600 mr-2">
+              <span className="text-ink-3 mr-2">
                 {new Date(entry.createdAt).toLocaleTimeString()}
               </span>
               {entry.message}

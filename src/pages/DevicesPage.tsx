@@ -77,10 +77,10 @@ export function DevicesPage() {
     <div className="max-w-5xl mx-auto py-6">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 mb-1">
+          <h1 className="text-2xl font-bold text-ink mb-1">
             Connected Devices
           </h1>
-          <p className="text-slate-400">
+          <p className="text-ink-2">
             Detected automatically - installs go to the starred device
           </p>
         </div>
@@ -106,13 +106,13 @@ export function DevicesPage() {
       </div>
 
       {!adbAvailable && (
-        <div className="card border-danger/30 bg-danger/[0.06] flex items-start gap-3 mb-6">
-          <AlertTriangle className="w-5 h-5 text-danger-light mt-0.5 shrink-0" />
+        <div className="card border-fault/30 bg-fault/[0.06] flex items-start gap-3 mb-6">
+          <AlertTriangle className="w-5 h-5 text-fault mt-0.5 shrink-0" />
           <div>
-            <h3 className="text-sm font-medium text-danger-light mb-1">
+            <h3 className="text-sm font-medium text-fault mb-1">
               ADB is not available
             </h3>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-ink-2">
               {adbError ??
                 "Install Android platform-tools, or set a custom ADB path in Settings."}
             </p>
@@ -134,11 +134,11 @@ export function DevicesPage() {
 
         {devices.length === 0 && adbAvailable && (
           <div className="col-span-full py-16 text-center card border-dashed">
-            <Usb className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <h3 className="text-xl font-medium text-slate-300 mb-2">
+            <Usb className="w-16 h-16 text-ink-3 mx-auto mb-4" />
+            <h3 className="text-xl font-medium text-ink-2 mb-2">
               No Devices Connected
             </h3>
-            <p className="text-slate-500 max-w-md mx-auto mb-6">
+            <p className="text-ink-3 max-w-md mx-auto mb-6">
               Connect an Android device via USB and enable USB Debugging in
               Developer Options. New devices appear here within a few seconds.
             </p>
@@ -193,13 +193,13 @@ function DeviceCard({
   return (
     <div
       className={cn(
-        "card relative overflow-hidden transition-all duration-300 animate-slide-up",
-        device.isPreferred && isOnline && "border-accent/50 shadow-glow",
+        "card relative overflow-hidden transition-all duration-300 will-enter",
+        device.isPreferred && isOnline && "border-signal/50 shadow-signal-glow",
       )}
       style={{ animationDelay: `${index * 0.08}s` }}
     >
       {device.isPreferred && isOnline && (
-        <div className="absolute top-0 right-0 w-16 h-16 bg-accent/10 rounded-bl-full pointer-events-none" />
+        <div className="absolute top-0 right-0 w-16 h-16 bg-signal/10 rounded-bl-full pointer-events-none" />
       )}
 
       <div className="flex justify-between items-start mb-4">
@@ -208,16 +208,16 @@ function DeviceCard({
             className={cn(
               "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
               isOnline
-                ? "bg-success/10 text-success-light"
+                ? "bg-verify/10 text-verify"
                 : isUnauthorized
-                  ? "bg-warning/10 text-warning-light"
-                  : "bg-slate-500/10 text-slate-400",
+                  ? "bg-caution/10 text-caution"
+                  : "bg-inset text-ink-2",
             )}
           >
             <Smartphone className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-lg text-slate-200 truncate">
+            <h3 className="font-semibold text-lg text-ink truncate">
               {device.model || "Unknown Device"}
             </h3>
             <div className="flex items-center gap-2 mt-1">
@@ -225,13 +225,13 @@ function DeviceCard({
                 className={cn(
                   "w-2 h-2 rounded-full shrink-0",
                   isOnline
-                    ? "bg-success shadow-glow-success"
+                    ? "bg-verify "
                     : isUnauthorized
-                      ? "bg-warning"
-                      : "bg-slate-500",
+                      ? "bg-caution"
+                      : "bg-ink-3",
                 )}
               />
-              <span className="text-xs text-slate-400 font-mono truncate selectable">
+              <span className="text-xs text-ink-2 font-mono truncate selectable">
                 {device.serial}
               </span>
             </div>
@@ -244,8 +244,8 @@ function DeviceCard({
           className={cn(
             "btn-icon rounded-full shrink-0",
             device.isPreferred && isOnline
-              ? "text-accent bg-accent/10 hover:bg-accent/20"
-              : "hover:text-accent",
+              ? "text-signal bg-signal/10 hover:bg-signal/20"
+              : "hover:text-signal",
             !isOnline && "opacity-40 cursor-not-allowed",
           )}
           title={device.isPreferred ? "Preferred device" : "Set as preferred"}
@@ -260,12 +260,12 @@ function DeviceCard({
       </div>
 
       {isUnauthorized && (
-        <div className="mb-4 px-3 py-2 rounded-lg bg-warning/[0.08] border border-warning/20 text-xs text-warning-light">
+        <div className="mb-4 px-3 py-2 rounded-lg bg-caution/[0.08] border border-caution/20 text-xs text-caution">
           Unauthorized - accept the USB debugging prompt on the device.
         </div>
       )}
 
-      <div className="bg-surface-400/50 rounded-lg p-4 grid grid-cols-2 gap-4 text-sm mb-4 border border-white/[0.04]">
+      <div className="bg-inset rounded-lg p-4 grid grid-cols-2 gap-4 text-sm mb-4 border border-line">
         <Field label="Android" value={device.androidVersion || "Unknown"} />
         <Field
           label="Architecture"
@@ -313,10 +313,10 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <span className="text-slate-500 block text-xs mb-1">{label}</span>
+      <span className="text-ink-3 block text-xs mb-1">{label}</span>
       <span
         className={cn(
-          "text-slate-200 font-medium",
+          "text-ink font-medium",
           mono && "font-mono text-xs",
         )}
       >
@@ -402,14 +402,14 @@ function DetailStat({
   value: string;
 }) {
   return (
-    <div className="stat-tile">
+    <div className="inset-panel p-4">
       <div className="flex items-center gap-2 mb-1.5">
-        <Icon className="w-4 h-4 text-accent" />
-        <span className="text-xs text-slate-500 uppercase tracking-wider">
+        <Icon className="w-4 h-4 text-signal" />
+        <span className="text-xs text-ink-3 uppercase tracking-wider">
           {label}
         </span>
       </div>
-      <div className="text-sm font-medium text-slate-200 truncate">{value}</div>
+      <div className="text-sm font-medium text-ink truncate">{value}</div>
     </div>
   );
 }
@@ -424,10 +424,10 @@ function Row({
 }) {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-slate-500">{label}</dt>
+      <dt className="text-ink-3">{label}</dt>
       <dd
         className={cn(
-          "text-slate-200 text-right truncate",
+          "text-ink text-right truncate",
           mono && "font-mono text-xs selectable",
         )}
       >
@@ -564,7 +564,7 @@ function InstalledAppsModal({
       >
         <div className="flex items-center gap-3 mb-4">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
             <input
               className="input pl-9 py-2"
               placeholder="Filter packages…"
@@ -573,10 +573,10 @@ function InstalledAppsModal({
               spellCheck={false}
             />
           </div>
-          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer shrink-0">
+          <label className="flex items-center gap-2 text-xs text-ink-2 cursor-pointer shrink-0">
             <input
               type="checkbox"
-              className="w-4 h-4 rounded border-white/[0.1] bg-surface-600 text-accent"
+              className="w-4 h-4 rounded border-line bg-inset text-signal"
               checked={includeSystem}
               onChange={(e) => setIncludeSystem(e.target.checked)}
             />
@@ -585,28 +585,28 @@ function InstalledAppsModal({
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-slate-500 py-8 text-center">
+          <p className="text-sm text-ink-3 py-8 text-center">
             Reading packages from device…
           </p>
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-slate-500 py-8 text-center">
+          <p className="text-sm text-ink-3 py-8 text-center">
             {packages.length === 0
               ? "No user apps installed"
               : "No packages match that filter"}
           </p>
         ) : (
-          <ul className="divide-y divide-white/[0.04]">
+          <ul className="divide-y divide-line">
             {filtered.map((pkg) => (
               <li
                 key={pkg.packageName}
                 className="flex items-center gap-3 py-2.5"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-mono text-slate-200 truncate selectable">
+                  <p className="text-sm font-mono text-ink truncate selectable">
                     {pkg.packageName}
                   </p>
                   {pkg.installedByApp && (
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-ink-3 mt-0.5">
                       Installed here
                       {pkg.versionName ? ` · v${pkg.versionName}` : ""}
                       {pkg.installedAt
@@ -616,7 +616,7 @@ function InstalledAppsModal({
                   )}
                 </div>
                 <button
-                  className="btn-icon hover:text-danger hover:bg-danger/10 shrink-0"
+                  className="btn-icon hover:text-fault hover:bg-fault/10 shrink-0"
                   onClick={() => setPendingUninstall(pkg.packageName)}
                   title="Uninstall"
                 >
@@ -715,9 +715,9 @@ function WifiConnectModal({
         }}
         spellCheck={false}
       />
-      <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+      <p className="text-xs text-ink-3 mt-3 leading-relaxed">
         On the device, enable Wireless debugging in Developer Options, or run{" "}
-        <code className="text-accent">adb tcpip 5555</code> while it is plugged
+        <code className="text-signal">adb tcpip 5555</code> while it is plugged
         in over USB.
       </p>
     </Modal>

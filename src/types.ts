@@ -140,3 +140,31 @@ export const STEP_LABELS: Record<string, string> = {
   install_apk: "Installing to device",
   verify_installation: "Verifying install",
 };
+
+/** Mirrors INSTALL_STEPS in the job engine. Order carries meaning here. */
+export const INSTALL_STEP_ORDER = [
+  "detect_source",
+  "resolve_download",
+  "download_file",
+  "validate_package",
+  "extract_package",
+  "install_apk",
+  "verify_installation",
+] as const;
+
+/** Short mono labels for the pipeline rail. */
+export const STEP_TICKS: Record<string, string> = {
+  detect_source: "detect",
+  resolve_download: "resolve",
+  download_file: "fetch",
+  validate_package: "verify",
+  extract_package: "unpack",
+  install_apk: "install",
+  verify_installation: "confirm",
+};
+
+export function stepsForJobType(type: Job["type"]): readonly string[] {
+  if (type === "download") return INSTALL_STEP_ORDER.slice(0, 4);
+  if (type === "analyze") return INSTALL_STEP_ORDER.slice(0, 1);
+  return INSTALL_STEP_ORDER;
+}

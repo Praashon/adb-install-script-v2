@@ -2,9 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Bench instrument theme.
+ *
+ * Colours are declared as "R G B" triples so Tailwind can apply opacity
+ * modifiers. Swapping data-theme on <html> re-themes the whole app.
+ */
 @layer base {
   :root,
-  :root[data-theme='dark'] {
+  :root[data-theme="dark"] {
     --canvas: 16 17 20;
     --surface: 25 27 32;
     --inset: 20 22 26;
@@ -24,7 +30,7 @@
     color-scheme: dark;
   }
 
-  :root[data-theme='light'] {
+  :root[data-theme="light"] {
     --canvas: 239 241 244;
     --surface: 255 255 255;
     --inset: 245 247 249;
@@ -35,23 +41,23 @@
     --ink-2: 84 92 105;
     --ink-3: 130 140 156;
 
-    --signal: 230 143 44;
+    --signal: 186 106 12;
     --signal-soft: 252 232 208;
     --verify: 46 142 86;
     --fault: 198 52 57;
-    --caution: 184 134 32;
+    --caution: 160 110 16;
 
     color-scheme: light;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(var(--line), 0.5) transparent;
+    scrollbar-color: rgb(var(--line-strong)) transparent;
   }
 
   *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
   }
 
   *::-webkit-scrollbar-track {
@@ -59,17 +65,13 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background: rgb(var(--line));
-    border-radius: 3px;
-  }
-
-  *::-webkit-scrollbar-thumb:hover {
     background: rgb(var(--line-strong));
+    border: 3px solid rgb(var(--canvas));
+    border-radius: 99px;
   }
 
   ::selection {
-    background: rgba(var(--signal), 0.3);
-    color: rgb(var(--ink));
+    background: rgb(var(--signal) / 0.28);
   }
 
   body {
@@ -78,18 +80,249 @@
     overflow: hidden;
     user-select: none;
     -webkit-app-region: no-drag;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
   }
 
+  /* Anything the user might copy into a terminal stays selectable. */
   input,
   textarea,
   code,
   pre {
     user-select: text;
+    -webkit-user-select: text;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--signal));
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* ---------- structure ---------- */
+
+  .panel {
+    @apply bg-surface border border-line rounded-xl;
+  }
+
+  .card {
+    @apply panel p-5;
+    transition:
+      border-color 160ms cubic-bezier(0.2, 0.6, 0.2, 1),
+      transform 160ms cubic-bezier(0.2, 0.6, 0.2, 1);
+  }
+
+  .card-interactive:hover {
+    @apply border-line-strong;
+    transform: translateY(-1px);
+  }
+
+  .inset-panel {
+    @apply bg-inset border border-line rounded-lg;
+  }
+
+  .divider {
+    @apply border-t border-line my-4;
+  }
+
+  /* The eyebrow is monospace because every label in this app names a
+     machine-side concept: a step, a serial, a package. */
+  .eyebrow {
+    @apply font-mono text-eyebrow uppercase text-ink-3;
+  }
+
+  .section-title {
+    @apply font-display text-lg font-semibold text-ink mb-4;
+  }
+
+  /* ---------- controls ---------- */
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg;
+    @apply text-sm font-medium whitespace-nowrap;
+    @apply disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none;
+    transition:
+      background-color 140ms cubic-bezier(0.2, 0.6, 0.2, 1),
+      border-color 140ms cubic-bezier(0.2, 0.6, 0.2, 1),
+      color 140ms cubic-bezier(0.2, 0.6, 0.2, 1);
+  }
+
+  .btn-primary {
+    @apply btn text-canvas;
+    background: rgb(var(--signal));
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: rgb(var(--signal) / 0.88);
+  }
+
+  .btn-secondary {
+    @apply btn bg-surface text-ink border border-line;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    @apply border-line-strong bg-inset;
+  }
+
+  .btn-danger {
+    @apply btn border;
+    color: rgb(var(--fault));
+    border-color: rgb(var(--fault) / 0.4);
+    background: rgb(var(--fault) / 0.08);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: rgb(var(--fault) / 0.16);
+  }
+
+  .btn-ghost {
+    @apply btn text-ink-2;
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    @apply bg-inset text-ink;
+  }
+
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-lg text-ink-3;
+    @apply disabled:opacity-40 disabled:pointer-events-none;
+    transition:
+      background-color 140ms cubic-bezier(0.2, 0.6, 0.2, 1),
+      color 140ms cubic-bezier(0.2, 0.6, 0.2, 1);
+  }
+
+  .btn-icon:hover:not(:disabled) {
+    @apply bg-inset text-ink;
+  }
+
+  .input {
+    @apply w-full bg-inset border border-line rounded-lg px-3 py-2.5 text-sm text-ink;
+    @apply placeholder:text-ink-3;
+    transition:
+      border-color 140ms cubic-bezier(0.2, 0.6, 0.2, 1),
+      box-shadow 140ms cubic-bezier(0.2, 0.6, 0.2, 1);
+  }
+
+  .input:focus {
+    @apply outline-none;
+    border-color: rgb(var(--signal) / 0.7);
+    box-shadow: 0 0 0 3px rgb(var(--signal) / 0.14);
+  }
+
+  .input-lg {
+    @apply input py-3.5 px-4 text-base;
+  }
+
+  .input-mono {
+    @apply input font-mono text-xs;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-ink-2 mb-1.5;
+  }
+
+  /* ---------- status ---------- */
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-mono text-eyebrow uppercase border;
+  }
+
+  .badge-signal {
+    @apply badge;
+    color: rgb(var(--signal));
+    border-color: rgb(var(--signal) / 0.35);
+    background: rgb(var(--signal) / 0.1);
+  }
+
+  .badge-verify {
+    @apply badge;
+    color: rgb(var(--verify));
+    border-color: rgb(var(--verify) / 0.35);
+    background: rgb(var(--verify) / 0.1);
+  }
+
+  .badge-fault {
+    @apply badge;
+    color: rgb(var(--fault));
+    border-color: rgb(var(--fault) / 0.35);
+    background: rgb(var(--fault) / 0.1);
+  }
+
+  .badge-neutral {
+    @apply badge text-ink-3 border-line bg-inset;
+  }
+
+  .status-dot {
+    @apply w-1.5 h-1.5 rounded-full shrink-0;
+  }
+
+  /* ---------- the pipeline rail (signature element) ---------- */
+
+  .rail {
+    @apply flex items-stretch gap-[3px] w-full;
+  }
+
+  .rail-seg {
+    @apply relative flex-1 overflow-hidden rounded-[2px];
+    height: 6px;
+    background: rgb(var(--line));
+  }
+
+  .rail-seg-fill {
+    @apply absolute inset-y-0 left-0;
+    width: 0%;
+    background: rgb(var(--signal));
+  }
+
+  .rail-seg[data-state="done"] .rail-seg-fill {
+    width: 100%;
+    background: rgb(var(--verify));
+  }
+
+  .rail-seg[data-state="failed"] .rail-seg-fill {
+    width: 100%;
+    background: rgb(var(--fault));
+  }
+
+  .log-line {
+    @apply font-mono text-xs leading-relaxed px-3 py-1.5 rounded border-l-2;
+    user-select: text;
+  }
+}
+
+@layer utilities {
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
     -webkit-app-region: no-drag;
   }
 
   .selectable {
     user-select: text;
-    -webkit-app-region: no-drag;
+    -webkit-user-select: text;
+  }
+
+  /* Hidden only until the entrance timeline has run once, so there is no flash
+     before GSAP takes over. Sections that mount later (a job starting, a
+     banner appearing) must NOT inherit the hidden state, hence the reset. */
+  .will-enter {
+    opacity: 0;
+  }
+
+  [data-entered="true"] .will-enter {
+    opacity: 1;
   }
 }

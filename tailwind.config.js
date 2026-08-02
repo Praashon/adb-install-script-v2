@@ -1,74 +1,77 @@
 /** @type {import('tailwindcss').Config} */
+
+// Every colour resolves through a CSS variable holding an "R G B" triple, so
+// the light/dark switch is a single attribute on <html> and opacity modifiers
+// such as bg-signal/10 keep working.
+const withAlpha = (variable) => `rgb(var(${variable}) / <alpha-value>)`;
+
 module.exports = {
   content: ["./src/**/*.{ts,tsx,html}"],
-  darkMode: ['class', '[data-theme="dark"]'],
+  darkMode: ["class", '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        canvas: "rgb(var(--canvas) / <alpha-value>)",
-        surface: "rgb(var(--surface) / <alpha-value>)",
-        inset: "rgb(var(--inset) / <alpha-value>)",
+        canvas: withAlpha("--canvas"),
+        surface: withAlpha("--surface"),
+        inset: withAlpha("--inset"),
         line: {
-          DEFAULT: "rgb(var(--line) / <alpha-value>)",
-          strong: "rgb(var(--line-strong) / <alpha-value>)",
+          DEFAULT: withAlpha("--line"),
+          strong: withAlpha("--line-strong"),
         },
         ink: {
-          DEFAULT: "rgb(var(--ink) / <alpha-value>)",
-          2: "rgb(var(--ink-2) / <alpha-value>)",
-          3: "rgb(var(--ink-3) / <alpha-value>)",
+          DEFAULT: withAlpha("--ink"),
+          2: withAlpha("--ink-2"),
+          3: withAlpha("--ink-3"),
         },
         signal: {
-          DEFAULT: "rgb(var(--signal) / <alpha-value>)",
-          soft: "rgb(var(--signal-soft) / <alpha-value>)",
+          DEFAULT: withAlpha("--signal"),
+          soft: withAlpha("--signal-soft"),
         },
-        verify: "rgb(var(--verify) / <alpha-value>)",
-        fault: "rgb(var(--fault) / <alpha-value>)",
-        caution: "rgb(var(--caution) / <alpha-value>)",
-        
-        // Aliases for compatibility if older classes are used anywhere
-        accent: {
-          DEFAULT: "rgb(var(--signal) / <alpha-value>)",
-          hover: "rgb(var(--signal) / <alpha-value>)",
-        },
-        success: {
-          DEFAULT: "rgb(var(--verify) / <alpha-value>)",
-        },
-        warning: {
-          DEFAULT: "rgb(var(--caution) / <alpha-value>)",
-        },
-        danger: {
-          DEFAULT: "rgb(var(--fault) / <alpha-value>)",
-        },
+        verify: withAlpha("--verify"),
+        fault: withAlpha("--fault"),
+        caution: withAlpha("--caution"),
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        // No webfonts: the app runs offline, so the stack is built from faces
+        // that ship with the OS. Segoe UI Variable carries the interface,
+        // Cascadia carries anything the user could paste into a terminal.
+        sans: [
+          "Segoe UI Variable Text",
+          "Segoe UI",
+          "system-ui",
+          "-apple-system",
+          "sans-serif",
+        ],
+        display: [
+          "Segoe UI Variable Display",
+          "Segoe UI",
+          "system-ui",
+          "-apple-system",
+          "sans-serif",
+        ],
+        mono: [
+          "Cascadia Code",
+          "Cascadia Mono",
+          "JetBrains Mono",
+          "Consolas",
+          "monospace",
+        ],
       },
-      boxShadow: {
-        card: "0 4px 24px rgba(0, 0, 0, 0.1)",
-      },
-      animation: {
-        "slide-up": "slide-up 0.3s ease-out",
-        "slide-down": "slide-down 0.3s ease-out",
-        "fade-in": "fade-in 0.2s ease-out",
-      },
-      keyframes: {
-        "slide-up": {
-          "0%": { transform: "translateY(10px)", opacity: "0" },
-          "100%": { transform: "translateY(0)", opacity: "1" },
-        },
-        "slide-down": {
-          "0%": { transform: "translateY(-10px)", opacity: "0" },
-          "100%": { transform: "translateY(0)", opacity: "1" },
-        },
-        "fade-in": {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
+      fontSize: {
+        eyebrow: ["0.6875rem", { lineHeight: "1", letterSpacing: "0.14em" }],
       },
       borderRadius: {
-        xl: "1rem",
-        "2xl": "1.25rem",
+        DEFAULT: "6px",
+        lg: "8px",
+        xl: "10px",
+        "2xl": "14px",
+      },
+      boxShadow: {
+        panel:
+          "0 1px 2px rgb(0 0 0 / 0.16), 0 8px 24px -12px rgb(0 0 0 / 0.28)",
+        lifted: "0 16px 48px -16px rgb(0 0 0 / 0.45)",
+        "signal-glow":
+          "0 0 0 1px rgb(var(--signal) / 0.35), 0 0 18px -4px rgb(var(--signal) / 0.5)",
       },
     },
   },

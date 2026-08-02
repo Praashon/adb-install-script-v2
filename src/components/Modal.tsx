@@ -35,7 +35,7 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm will-enter"
       onClick={onClose}
       role="presentation"
     >
@@ -44,19 +44,19 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "w-full bg-surface-500 border border-white/[0.08] rounded-2xl shadow-2xl",
-          "flex flex-col max-h-[85vh] animate-slide-up",
+          "w-full bg-canvas border border-line rounded-2xl shadow-2xl",
+          "flex flex-col max-h-[85vh] will-enter",
           SIZES[size],
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-start justify-between gap-4 p-6 border-b border-white/[0.06]">
+        <header className="flex items-start justify-between gap-4 p-6 border-b border-line">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-100 truncate">
+            <h2 className="text-lg font-semibold text-ink truncate">
               {title}
             </h2>
             {description && (
-              <p className="text-sm text-slate-400 mt-1">{description}</p>
+              <p className="text-sm text-ink-2 mt-1">{description}</p>
             )}
           </div>
           <button
@@ -71,7 +71,7 @@ export function Modal({
         <div className="flex-1 overflow-y-auto p-6">{children}</div>
 
         {footer && (
-          <footer className="flex items-center justify-end gap-3 p-6 border-t border-white/[0.06]">
+          <footer className="flex items-center justify-end gap-3 p-6 border-t border-line">
             {footer}
           </footer>
         )}
@@ -120,7 +120,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-sm text-slate-300 leading-relaxed">{message}</p>
+      <p className="text-sm text-ink-2 leading-relaxed">{message}</p>
     </Modal>
   );
 }

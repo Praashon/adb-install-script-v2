@@ -123,14 +123,14 @@ export function SettingsPage() {
     <div className="max-w-4xl mx-auto py-6">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 mb-1">Settings</h1>
-          <p className="text-slate-400">
+          <h1 className="text-2xl font-bold text-ink mb-1">Settings</h1>
+          <p className="text-ink-2">
             Configure ADB Installer Pro behavior and preferences
           </p>
         </div>
         <div className="flex items-center gap-4">
           {isDirty && (
-            <span className="text-xs text-warning-light">Unsaved changes</span>
+            <span className="text-xs text-caution">Unsaved changes</span>
           )}
           <button
             className="btn-primary"
@@ -145,8 +145,8 @@ export function SettingsPage() {
 
       <div className="space-y-6">
         <section className="card">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-            <Terminal className="w-5 h-5 text-accent" />
+          <h2 className="text-lg font-semibold text-ink mb-4 flex items-center gap-2">
+            <Terminal className="w-5 h-5 text-signal" />
             ADB Configuration
           </h2>
 
@@ -170,7 +170,7 @@ export function SettingsPage() {
                   Browse
                 </button>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-ink-3 mt-1">
                 If empty, the app looks in PATH and the standard Android SDK
                 locations.
               </p>
@@ -180,20 +180,20 @@ export function SettingsPage() {
               className={cn(
                 "rounded-xl border p-4 flex items-start gap-3",
                 adbStatus?.available
-                  ? "border-success/25 bg-success/[0.05]"
-                  : "border-danger/25 bg-danger/[0.05]",
+                  ? "border-verify/25 bg-verify/[0.05]"
+                  : "border-fault/25 bg-fault/[0.05]",
               )}
             >
               {adbStatus?.available ? (
-                <CheckCircle2 className="w-5 h-5 text-success-light mt-0.5 shrink-0" />
+                <CheckCircle2 className="w-5 h-5 text-verify mt-0.5 shrink-0" />
               ) : (
-                <XCircle className="w-5 h-5 text-danger-light mt-0.5 shrink-0" />
+                <XCircle className="w-5 h-5 text-fault mt-0.5 shrink-0" />
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-200">
+                <p className="text-sm font-medium text-ink">
                   {adbStatus?.available ? "ADB detected" : "ADB not found"}
                 </p>
-                <p className="text-xs text-slate-400 mt-1 font-mono break-all selectable">
+                <p className="text-xs text-ink-2 mt-1 font-mono break-all selectable">
                   {adbStatus?.version ?? adbStatus?.path ?? "Checking…"}
                 </p>
               </div>
@@ -212,8 +212,8 @@ export function SettingsPage() {
         </section>
 
         <section className="card">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-            <Folder className="w-5 h-5 text-accent" />
+          <h2 className="text-lg font-semibold text-ink mb-4 flex items-center gap-2">
+            <Folder className="w-5 h-5 text-signal" />
             Download Preferences
           </h2>
 
@@ -241,7 +241,7 @@ export function SettingsPage() {
                 </button>
               </div>
               {settings["download.defaultDirectory"] && (
-                <p className="text-xs text-slate-500 mt-1 font-mono break-all">
+                <p className="text-xs text-ink-3 mt-1 font-mono break-all">
                   Default: {settings["download.defaultDirectory"]}
                 </p>
               )}
@@ -284,7 +284,7 @@ export function SettingsPage() {
         </section>
 
         <section className="card">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">
+          <h2 className="text-lg font-semibold text-ink mb-4">
             Installation
           </h2>
           <div className="space-y-4 max-w-2xl">
@@ -316,7 +316,7 @@ export function SettingsPage() {
         </section>
 
         <section className="card">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">
+          <h2 className="text-lg font-semibold text-ink mb-4">
             Security &amp; Engines
           </h2>
           <div className="space-y-4 max-w-2xl">
@@ -332,7 +332,7 @@ export function SettingsPage() {
                 update("browser.assisted", String(checked))
               }
               title="Assisted browser mode"
-              description="Open a visible browser window when a site asks for human verification, so you can complete the check yourself. Note that services like Cloudflare Turnstile detect the automation channel and may loop regardless — for those sites, download in your normal browser and use Install from file."
+              description="Open a visible browser window when a site asks for human verification, so you can complete the check yourself. Note that services like Cloudflare Turnstile detect the automation channel and may loop regardless. For those sites, download in your normal browser and use Install from file."
             />
             <Toggle
               checked={settings["adapter.autoUpdate"] !== "false"}
@@ -347,8 +347,8 @@ export function SettingsPage() {
 
         {appInfo && (
           <section className="card">
-            <h2 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
-              <Info className="w-5 h-5 text-accent" />
+            <h2 className="text-lg font-semibold text-ink mb-4 flex items-center gap-2">
+              <Info className="w-5 h-5 text-signal" />
               About
             </h2>
             <dl className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm max-w-2xl">
@@ -394,16 +394,16 @@ function Toggle({
       <div className="relative flex items-center h-5">
         <input
           type="checkbox"
-          className="w-4 h-4 rounded border-white/[0.1] bg-surface-600 text-accent focus:ring-accent/30 focus:ring-offset-surface-500"
+          className="w-4 h-4 rounded border-line bg-inset text-signal focus:ring-signal/30 "
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
         />
       </div>
       <div className="text-sm">
-        <span className="font-medium text-slate-200 group-hover:text-white transition-colors block">
+        <span className="font-medium text-ink group-hover:text-white transition-colors block">
           {title}
         </span>
-        <span className="text-slate-500 block mt-0.5">{description}</span>
+        <span className="text-ink-3 block mt-0.5">{description}</span>
       </div>
     </label>
   );
@@ -421,12 +421,12 @@ function InfoRow({
 }) {
   return (
     <div className={full ? "col-span-2" : undefined}>
-      <dt className="text-slate-500 text-xs uppercase tracking-wider mb-1">
+      <dt className="text-ink-3 text-xs uppercase tracking-wider mb-1">
         {label}
       </dt>
       <dd
         className={cn(
-          "text-slate-200 break-all",
+          "text-ink break-all",
           mono && "font-mono text-xs selectable",
         )}
       >

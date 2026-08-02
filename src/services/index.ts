@@ -15,7 +15,14 @@ import type {
   Source,
   SourceDetail,
 } from "@/types";
-const api = () => window.electronAPI;
+const api = (): NonNullable<typeof window.electronAPI> => {
+  if (!window.electronAPI) {
+    throw new Error(
+      "The app bridge is not available. The preload script failed to load, so restart the app.",
+    );
+  }
+  return window.electronAPI;
+};
 export function toMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   const match = raw.match(
@@ -134,6 +141,11 @@ export const appService = {
   openExternal: (url: string) => call(() => api().app.openExternal(url)),
   getInfo: (): Promise<AppInfo> => call(() => api().app.getInfo()),
 };
+export const isBridgeAvailable = (): boolean => Boolean(window.electronAPI);
+
 export const onAppEvent = (
   callback: (event: string, data: unknown) => void,
-): (() => void) => api().onEvent(callback);
+): (() => void) => {
+  if (!window.electronAPI) return () => undefined;
+  return window.electronAPI.onEvent(callback);
+};

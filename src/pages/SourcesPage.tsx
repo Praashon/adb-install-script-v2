@@ -132,10 +132,10 @@ export function SourcesPage() {
     <div className="max-w-5xl mx-auto py-6">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 mb-1">
+          <h1 className="text-2xl font-bold text-ink mb-1">
             Source Adapters
           </h1>
-          <p className="text-slate-400">
+          <p className="text-ink-2">
             Manage supported APK websites and custom plugins
           </p>
         </div>
@@ -179,11 +179,11 @@ export function SourcesPage() {
 
         {sources.length === 0 && !isLoading && (
           <div className="col-span-full py-12 text-center card border-dashed">
-            <Database className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-300 mb-2">
+            <Database className="w-12 h-12 text-ink-3 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-ink-2 mb-2">
               No Sources Found
             </h3>
-            <p className="text-slate-500 mb-6">
+            <p className="text-ink-3 mb-6">
               Built-in adapters failed to load. Reload them, or create one from
               any website.
             </p>
@@ -232,13 +232,13 @@ export function SourcesPage() {
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case "healthy":
-      return <CheckCircle2 className="w-5 h-5 text-success-light" />;
+      return <CheckCircle2 className="w-5 h-5 text-verify" />;
     case "broken":
-      return <XCircle className="w-5 h-5 text-danger-light" />;
+      return <XCircle className="w-5 h-5 text-fault" />;
     case "degraded":
-      return <AlertTriangle className="w-5 h-5 text-warning-light" />;
+      return <AlertTriangle className="w-5 h-5 text-caution" />;
     default:
-      return <Power className="w-5 h-5 text-slate-500" />;
+      return <Power className="w-5 h-5 text-ink-3" />;
   }
 }
 function SourceCard({
@@ -264,8 +264,8 @@ function SourceCard({
   return (
     <div
       className={cn(
-        "card transition-all animate-slide-up group flex flex-col",
-        disabled ? "opacity-60" : "hover:border-accent/30",
+        "card transition-all will-enter group flex flex-col",
+        disabled ? "opacity-60" : "hover:border-signal/30",
       )}
       style={{ animationDelay: `${index * 0.05}s` }}
     >
@@ -275,7 +275,7 @@ function SourceCard({
             className={cn(
               "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
               source.isBuiltIn
-                ? "bg-accent/10 text-accent"
+                ? "bg-signal/10 text-signal"
                 : "bg-purple-500/10 text-purple-400",
             )}
           >
@@ -286,10 +286,10 @@ function SourceCard({
             )}
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-slate-200 truncate">
+            <h3 className="font-semibold text-ink truncate">
               {source.name}
             </h3>
-            <p className="text-xs text-slate-400 truncate">{source.domain}</p>
+            <p className="text-xs text-ink-2 truncate">{source.domain}</p>
           </div>
         </div>
         <StatusIcon status={source.status} />
@@ -299,41 +299,41 @@ function SourceCard({
 
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">
+          <div className="text-ink-3 mb-1 text-xs uppercase tracking-wider">
             Success Rate
           </div>
-          <div className="font-medium text-slate-200">
+          <div className="font-medium text-ink">
             {Math.round(source.successRate)}%
             {source.totalAttempts > 0 && (
-              <span className="text-xs text-slate-500 ml-1">
+              <span className="text-xs text-ink-3 ml-1">
                 ({source.totalAttempts})
               </span>
             )}
           </div>
         </div>
         <div>
-          <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">
+          <div className="text-ink-3 mb-1 text-xs uppercase tracking-wider">
             Version
           </div>
-          <div className="font-medium text-slate-200">
+          <div className="font-medium text-ink">
             v{source.activeAdapterVersion}
           </div>
         </div>
       </div>
 
       {source.lastTested && (
-        <p className="text-xs text-slate-500 mt-3">
+        <p className="text-xs text-ink-3 mt-3">
           Last tested {formatDate(source.lastTested)}
         </p>
       )}
 
       {!source.hasAdapter && (
-        <p className="text-xs text-warning-light mt-3">
+        <p className="text-xs text-caution mt-3">
           No adapter rules loaded - generic extraction will be used.
         </p>
       )}
 
-      <div className="mt-auto pt-4 mt-4 border-t border-white/[0.06] grid grid-cols-2 gap-2">
+      <div className="mt-auto pt-4 mt-4 border-t border-line grid grid-cols-2 gap-2">
         <button
           className="btn-secondary py-1.5 text-xs"
           onClick={onTest}
@@ -367,7 +367,7 @@ function SourceCard({
           {disabled ? "Enable" : "Disable"}
         </button>
         <button
-          className="btn-secondary py-1.5 text-xs col-span-2 hover:text-danger-light hover:border-danger/30"
+          className="btn-secondary py-1.5 text-xs col-span-2 hover:text-fault hover:border-fault/30"
           onClick={onDelete}
           disabled={busy}
         >
@@ -441,7 +441,7 @@ function TestSourceModal({
         placeholder={`https://${source?.domain ?? "example.com"}/some-app`}
         spellCheck={false}
       />
-      <p className="text-xs text-slate-500 mt-2">
+      <p className="text-xs text-ink-3 mt-2">
         Point this at a real app page for the most accurate result - a homepage
         usually has no download link.
       </p>
@@ -451,34 +451,34 @@ function TestSourceModal({
           className={cn(
             "mt-5 rounded-xl border p-4",
             result.success
-              ? "border-success/30 bg-success/[0.06]"
-              : "border-danger/30 bg-danger/[0.06]",
+              ? "border-verify/30 bg-verify/[0.06]"
+              : "border-fault/30 bg-fault/[0.06]",
           )}
         >
           <div className="flex items-center gap-2 mb-2">
             {result.success ? (
-              <CheckCircle2 className="w-4 h-4 text-success-light" />
+              <CheckCircle2 className="w-4 h-4 text-verify" />
             ) : (
-              <XCircle className="w-4 h-4 text-danger-light" />
+              <XCircle className="w-4 h-4 text-fault" />
             )}
             <span
               className={cn(
                 "text-sm font-medium",
-                result.success ? "text-success-light" : "text-danger-light",
+                result.success ? "text-verify" : "text-fault",
               )}
             >
               {result.success ? "Adapter is working" : "Adapter did not match"}
             </span>
-            <span className="text-xs text-slate-500 ml-auto">
+            <span className="text-xs text-ink-3 ml-auto">
               {result.durationMs}ms
             </span>
           </div>
-          <p className="text-sm text-slate-300 break-words selectable">
+          <p className="text-sm text-ink-2 break-words selectable">
             {result.message}
           </p>
           {result.downloadUrl && (
             <button
-              className="text-xs text-accent hover:underline mt-2 inline-flex items-center gap-1"
+              className="text-xs text-signal hover:underline mt-2 inline-flex items-center gap-1"
               onClick={() => void appService.openExternal(result.downloadUrl!)}
             >
               <ExternalLink className="w-3 h-3" />
@@ -616,7 +616,7 @@ function EditSourceModal({
       }
     >
       {isLoading ? (
-        <p className="text-sm text-slate-500 py-8 text-center">
+        <p className="text-sm text-ink-3 py-8 text-center">
           Loading adapter rules…
         </p>
       ) : (
@@ -656,7 +656,7 @@ function EditSourceModal({
             <div key={field.key}>
               <label className="label">{field.label}</label>
               <input
-                className="input-sm"
+                className="input-mono"
                 value={rules[field.key] ?? ""}
                 onChange={(e) =>
                   setRules((prev) => ({ ...prev, [field.key]: e.target.value }))
@@ -664,26 +664,26 @@ function EditSourceModal({
                 placeholder="Leave empty to skip"
                 spellCheck={false}
               />
-              <p className="text-xs text-slate-500 mt-1">{field.hint}</p>
+              <p className="text-xs text-ink-3 mt-1">{field.hint}</p>
             </div>
           ))}
 
           <div>
             <label className="label">Fallback selectors</label>
             <textarea
-              className="input-sm min-h-[96px] resize-y"
+              className="input-mono min-h-[96px] resize-y"
               value={fallbacks}
               onChange={(e) => setFallbacks(e.target.value)}
               placeholder={"a[href$='.apk']\na.download-btn"}
               spellCheck={false}
             />
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-ink-3 mt-1">
               One selector per line. Tried in order when the primary selectors
               miss.
             </p>
           </div>
 
-          <p className="text-xs text-slate-500 border-t border-white/[0.06] pt-4">
+          <p className="text-xs text-ink-3 border-t border-line pt-4">
             Saving creates adapter v{(detail?.activeVersion ?? 1) + 1}. Only CSS
             selectors and static values are stored - adapters never execute
             code.
