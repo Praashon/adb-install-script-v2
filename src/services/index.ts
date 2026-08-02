@@ -105,6 +105,11 @@ export const deviceService = {
     call(() => api().devices.removeBloat(serial, packageName)),
   extractApp: (serial: string, packageName: string) =>
     call(() => api().devices.extractApp(serial, packageName)),
+  screenshot: (serial: string) => call(() => api().devices.screenshot(serial)),
+  recordStart: (serial: string) => call(() => api().devices.recordStart(serial)),
+  recordStop: (serial: string) => call(() => api().devices.recordStop(serial)),
+  recordStatus: (serial: string) =>
+    call(() => api().devices.recordStatus(serial)),
   connect: (address: string) => call(() => api().devices.connect(address)),
   disconnect: (address: string) =>
     call(() => api().devices.disconnect(address)),

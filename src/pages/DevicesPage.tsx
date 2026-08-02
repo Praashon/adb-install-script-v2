@@ -9,6 +9,9 @@ import {
   Package,
   Trash2,
   FileDown,
+  Camera,
+  Video,
+  Square,
   Search,
   AlertTriangle,
   BatteryMedium,
@@ -29,6 +32,74 @@ export function DevicesPage() {
   const [detailDevice, setDetailDevice] = useState<Device | null>(null);
   const [appsDevice, setAppsDevice] = useState<Device | null>(null);
   const [showConnect, setShowConnect] = useState(false);
+  const [capturing, setCapturing] = useState<string | null>(null);
+  const [recordingSerial, setRecordingSerial] = useState<string | null>(null);
+  const [savingRecord, setSavingRecord] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const online = useAppStore
+      .getState()
+      .devices.filter((d) => d.status === "online");
+    (async () => {
+      for (const d of online) {
+        try {
+          const status = await deviceService.recordStatus(d.serial);
+          if (active && status.recording) setRecordingSerial(d.serial);
+        } catch {
+          void 0;
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+  const screenshot = async (serial: string): Promise<void> => {
+    setCapturing(serial);
+    try {
+      await deviceService.screenshot(serial);
+      notify.success("Screenshot saved", "Opened the captures folder.");
+    } catch (error) {
+      notify.error(
+        "Screenshot failed",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setCapturing(null);
+    }
+  };
+  const toggleRecord = async (serial: string): Promise<void> => {
+    if (recordingSerial && recordingSerial !== serial) {
+      notify.warning("Already recording", "Stop the current recording first.");
+      return;
+    }
+    if (recordingSerial === serial) {
+      setSavingRecord(true);
+      try {
+        await deviceService.recordStop(serial);
+        notify.success("Recording saved", "Opened the captures folder.");
+      } catch (error) {
+        notify.error(
+          "Could not save recording",
+          error instanceof Error ? error.message : undefined,
+        );
+      } finally {
+        setRecordingSerial(null);
+        setSavingRecord(false);
+      }
+      return;
+    }
+    try {
+      await deviceService.recordStart(serial);
+      setRecordingSerial(serial);
+      notify.info("Recording started", "Up to 3 minutes. Press stop to save.");
+    } catch (error) {
+      notify.error(
+        "Could not start recording",
+        error instanceof Error ? error.message : undefined,
+      );
+    }
+  };
   const refresh = async (): Promise<void> => {
     setIsRefreshing(true);
     try {
@@ -127,9 +198,14 @@ export function DevicesPage() {
             key={device.serial}
             device={device}
             index={i}
+            capturing={capturing === device.serial}
+            recording={recordingSerial === device.serial}
+            savingRecord={savingRecord && recordingSerial === device.serial}
             onSetPreferred={() => void setPreferred(device.serial)}
             onDetails={() => void openDetails(device)}
             onApps={() => setAppsDevice(device)}
+            onScreenshot={() => void screenshot(device.serial)}
+            onToggleRecord={() => void toggleRecord(device.serial)}
           />
         ))}
 
@@ -179,15 +255,25 @@ export function DevicesPage() {
 function DeviceCard({
   device,
   index,
+  capturing,
+  recording,
+  savingRecord,
   onSetPreferred,
   onDetails,
   onApps,
+  onScreenshot,
+  onToggleRecord,
 }: {
   device: Device;
   index: number;
+  capturing: boolean;
+  recording: boolean;
+  savingRecord: boolean;
   onSetPreferred: () => void;
   onDetails: () => void;
   onApps: () => void;
+  onScreenshot: () => void;
+  onToggleRecord: () => void;
 }) {
   const isOnline = device.status === "online";
   const isUnauthorized = device.status === "unauthorized";
@@ -296,6 +382,32 @@ function DeviceCard({
         >
           <Package className="w-4 h-4" />
           Installed Apps
+        </button>
+      </div>
+
+      <div className="flex gap-2 mt-2">
+        <button
+          className="btn-secondary flex-1 py-2 text-xs"
+          disabled={!isOnline || capturing}
+          onClick={onScreenshot}
+        >
+          <Camera className={cn("w-4 h-4", capturing && "animate-pulse")} />
+          {capturing ? "Capturing" : "Screenshot"}
+        </button>
+        <button
+          className={cn(
+            "btn-secondary flex-1 py-2 text-xs",
+            recording && "text-fault border-fault/40 bg-fault/[0.06]",
+          )}
+          disabled={!isOnline || savingRecord}
+          onClick={onToggleRecord}
+        >
+          {recording ? (
+            <Square className="w-3.5 h-3.5 fill-current" />
+          ) : (
+            <Video className="w-4 h-4" />
+          )}
+          {recording ? "Stop" : savingRecord ? "Saving" : "Record"}
         </button>
       </div>
     </div>

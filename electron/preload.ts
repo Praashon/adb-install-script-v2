@@ -137,6 +137,10 @@ export interface ElectronAPI {
       folder?: string;
       files?: number;
     }>;
+    screenshot(serial: string): Promise<{ path: string }>;
+    recordStart(serial: string): Promise<{ recording: boolean }>;
+    recordStop(serial: string): Promise<{ path: string }>;
+    recordStatus(serial: string): Promise<{ recording: boolean }>;
     connect(address: string): Promise<{
       success: boolean;
       message: string;
@@ -226,6 +230,10 @@ const api: ElectronAPI = {
       ipcRenderer.invoke("device:removeBloat", serial, packageName),
     extractApp: (serial, packageName) =>
       ipcRenderer.invoke("device:extractApp", serial, packageName),
+    screenshot: (serial) => ipcRenderer.invoke("device:screenshot", serial),
+    recordStart: (serial) => ipcRenderer.invoke("device:recordStart", serial),
+    recordStop: (serial) => ipcRenderer.invoke("device:recordStop", serial),
+    recordStatus: (serial) => ipcRenderer.invoke("device:recordStatus", serial),
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),
     adbStatus: () => ipcRenderer.invoke("device:adbStatus"),

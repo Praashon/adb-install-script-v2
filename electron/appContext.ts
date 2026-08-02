@@ -19,6 +19,7 @@ import { AdapterManager } from "@source-engine/adapterManager";
 import { FailureTracker } from "@adapter-monitor/failureTracker";
 import { HealthChecker } from "@adapter-monitor/healthChecker";
 import { AdbManager } from "@adb-engine/adbManager";
+import { cancelAllRecordings } from "@adb-engine/mediaCapture";
 import { DeviceMonitor } from "./deviceMonitor";
 export interface AppContext {
   db: BetterSQLite3Database<typeof schema>;
@@ -168,6 +169,7 @@ export async function createAppContext(
     dispose(): void {
       unsubscribeLogs();
       deviceMonitor.stop();
+      cancelAllRecordings();
     },
   };
 }

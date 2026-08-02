@@ -50,6 +50,13 @@ function saveDialog(
     ? dialog.showSaveDialog(window, options)
     : dialog.showSaveDialog(options);
 }
+function captureStamp(): string {
+  return new Date()
+    .toISOString()
+    .replace(/\.\d+Z$/, "")
+    .replace(/:/g, "-")
+    .replace("T", "_");
+}
 function registerWindowHandlers(): void {
   ipcMain.removeAllListeners("window:minimize");
   ipcMain.removeAllListeners("window:maximize");
@@ -502,6 +509,43 @@ function registerDeviceHandlers(ctx: AppContext): void {
     });
     shell.showItemInFolder(join(dest, basename(paths[0])));
     return { cancelled: false, folder: dest, files: pulled };
+  });
+
+  handle("device:screenshot", async (serial: string) => {
+    const { captureScreenshot } = await import("@adb-engine/mediaCapture");
+    const adb = ctx.createAdbManager();
+    const dir = join(ctx.getSettings().downloadDirectory, "captures");
+    mkdirSync(dir, { recursive: true });
+    const localPath = join(dir, `screenshot-${captureStamp()}.png`);
+    await captureScreenshot(adb.getAdbPath(), serial, localPath);
+    ctx.eventBus.adb("info", "Captured screenshot", { serial, path: localPath });
+    shell.showItemInFolder(localPath);
+    return { path: localPath };
+  });
+
+  handle("device:recordStart", async (serial: string) => {
+    const { startRecording } = await import("@adb-engine/mediaCapture");
+    const adb = ctx.createAdbManager();
+    startRecording(adb.getAdbPath(), serial);
+    ctx.eventBus.adb("info", "Screen recording started", { serial });
+    return { recording: true };
+  });
+
+  handle("device:recordStop", async (serial: string) => {
+    const { stopRecording } = await import("@adb-engine/mediaCapture");
+    const adb = ctx.createAdbManager();
+    const dir = join(ctx.getSettings().downloadDirectory, "captures");
+    mkdirSync(dir, { recursive: true });
+    const localPath = join(dir, `recording-${captureStamp()}.mp4`);
+    await stopRecording(adb.getAdbPath(), serial, localPath);
+    ctx.eventBus.adb("info", "Screen recording saved", { serial, path: localPath });
+    shell.showItemInFolder(localPath);
+    return { path: localPath };
+  });
+
+  handle("device:recordStatus", async (serial: string) => {
+    const { isRecording } = await import("@adb-engine/mediaCapture");
+    return { recording: isRecording(serial) };
   });
 
   handle("device:connect", async (address: string) => {
