@@ -136,6 +136,7 @@ export const deviceService = {
   connect: (address: string) => call(() => api().devices.connect(address)),
   disconnect: (address: string) =>
     call(() => api().devices.disconnect(address)),
+  reconnect: (serial: string) => call(() => api().devices.reconnect(serial)),
   adbStatus: (): Promise<AdbStatus> => call(() => api().devices.adbStatus()),
 };
 export const wirelessService = {

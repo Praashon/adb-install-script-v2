@@ -257,6 +257,22 @@ export function DevicesPage() {
       );
     }
   };
+  const [reconnecting, setReconnecting] = useState<string | null>(null);
+  const reconnectDevice = async (serial: string): Promise<void> => {
+    setReconnecting(serial);
+    try {
+      await deviceService.reconnect(serial);
+      const data = await deviceService.refresh();
+      setDevices(data);
+    } catch (error) {
+      notify.error(
+        "Could not reconnect",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setReconnecting(null);
+    }
+  };
   const goWireless = async (serial: string): Promise<void> => {
     setWirelessBusy(serial);
     try {
@@ -408,6 +424,7 @@ export function DevicesPage() {
             savingRecord={savingRecord && recordingSerial === device.serial}
             wirelessBusy={wirelessBusy === device.serial}
             mirroring={mirroring.has(device.serial)}
+            reconnecting={reconnecting === device.serial}
             onSetPreferred={() => void setPreferred(device.serial)}
             onDetails={() => void openDetails(device)}
             onApps={() => setAppsDevice(device)}
@@ -415,6 +432,7 @@ export function DevicesPage() {
             onToggleRecord={() => void toggleRecord(device.serial)}
             onGoWireless={() => void goWireless(device.serial)}
             onToggleMirror={() => void toggleMirror(device.serial)}
+            onReconnect={() => void reconnectDevice(device.serial)}
           />
         ))}
 
@@ -470,6 +488,7 @@ function DeviceCard({
   savingRecord,
   wirelessBusy,
   mirroring,
+  reconnecting,
   onSetPreferred,
   onDetails,
   onApps,
@@ -477,6 +496,7 @@ function DeviceCard({
   onToggleRecord,
   onGoWireless,
   onToggleMirror,
+  onReconnect,
 }: {
   device: Device;
   index: number;
@@ -485,6 +505,7 @@ function DeviceCard({
   savingRecord: boolean;
   wirelessBusy: boolean;
   mirroring: boolean;
+  reconnecting: boolean;
   onSetPreferred: () => void;
   onDetails: () => void;
   onApps: () => void;
@@ -492,6 +513,7 @@ function DeviceCard({
   onToggleRecord: () => void;
   onGoWireless: () => void;
   onToggleMirror: () => void;
+  onReconnect: () => void;
 }) {
   const isOnline = device.status === "online";
   const isUnauthorized = device.status === "unauthorized";
@@ -584,6 +606,25 @@ function DeviceCard({
           className="col-span-2"
         />
       </div>
+
+      {!isOnline && !isUnauthorized && (
+        <div className="mb-2">
+          <p className="text-xs text-ink-3 mb-2">
+            This device is offline. Reconnect kicks the ADB transport, which
+            often clears a stale wireless or USB connection.
+          </p>
+          <button
+            className="btn-secondary w-full py-2 text-xs"
+            disabled={reconnecting}
+            onClick={onReconnect}
+          >
+            <RefreshCw
+              className={cn("w-4 h-4", reconnecting && "animate-spin")}
+            />
+            {reconnecting ? "Reconnecting" : "Reconnect"}
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button

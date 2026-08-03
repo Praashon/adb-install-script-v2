@@ -507,6 +507,12 @@ export class AdbManager {
   async disconnect(address: string): Promise<void> {
     await this.exec(["disconnect", address], 20000).catch(() => undefined);
   }
+  async reconnect(serial: string): Promise<void> {
+    await this.exec(["-s", serial, "reconnect"], 15000).catch(() => undefined);
+  }
+  async reconnectOffline(): Promise<void> {
+    await this.exec(["reconnect", "offline"], 15000).catch(() => undefined);
+  }
   async tcpip(
     serial: string,
     port = 5555,

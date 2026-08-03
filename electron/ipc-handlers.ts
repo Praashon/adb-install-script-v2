@@ -685,6 +685,15 @@ function registerDeviceHandlers(ctx: AppContext): void {
     await ctx.deviceMonitor.refresh();
   });
 
+  handle("device:reconnect", async (serial: string) => {
+    const adb = ctx.createAdbManager();
+    await adb.reconnect(serial);
+    await adb.reconnectOffline();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await ctx.deviceMonitor.refresh();
+    return { ok: true };
+  });
+
   handle("wireless:list", () => ctx.wirelessRepo.findAll());
 
   handle(

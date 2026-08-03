@@ -11,6 +11,7 @@ export class DeviceMonitor {
   private lastSignature = "";
   private lastDevices: DeviceSnapshot[] = [];
   private adbAvailable: boolean | null = null;
+  private reconnectAttempts = new Set<string>();
   constructor(
     private deviceRepo: DeviceRepository,
     private eventBus: EventBus,
@@ -64,6 +65,21 @@ export class DeviceMonitor {
       for (const known of this.deviceRepo.findAll()) {
         if (!seen.has(known.serial) && known.status !== "offline") {
           this.deviceRepo.updateStatus(known.serial, "offline");
+        }
+      }
+      for (const device of devices) {
+        if (
+          device.status === "offline" &&
+          !this.reconnectAttempts.has(device.serial)
+        ) {
+          this.reconnectAttempts.add(device.serial);
+          void adb.reconnect(device.serial);
+        }
+      }
+      for (const serial of [...this.reconnectAttempts]) {
+        const current = devices.find((d) => d.serial === serial);
+        if (!current || current.status !== "offline") {
+          this.reconnectAttempts.delete(serial);
         }
       }
       let preferredSerial = preferred?.serial;

@@ -231,6 +231,7 @@ export interface ElectronAPI {
       message: string;
     }>;
     disconnect(address: string): Promise<void>;
+    reconnect(serial: string): Promise<{ ok: boolean }>;
     adbStatus(): Promise<AdbStatus>;
   };
   wireless: {
@@ -365,6 +366,7 @@ const api: ElectronAPI = {
     pair: (address, code) => ipcRenderer.invoke("device:pair", address, code),
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),
+    reconnect: (serial) => ipcRenderer.invoke("device:reconnect", serial),
     adbStatus: () => ipcRenderer.invoke("device:adbStatus"),
   },
   wireless: {

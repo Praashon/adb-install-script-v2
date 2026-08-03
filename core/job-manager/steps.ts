@@ -1,6 +1,6 @@
 import { join, extname, basename } from "path";
 import { existsSync, mkdirSync } from "fs";
-import { rm } from "fs/promises";
+import { rm, open } from "fs/promises";
 import { EventBus } from "@core/event-bus/eventBus";
 import { JobRepository } from "@core/database/repositories/jobRepository";
 import { SourceRepository } from "@core/database/repositories/sourceRepository";
@@ -25,6 +25,7 @@ import { Installer } from "@adb-engine/installer";
 import { Verifier } from "@adb-engine/verifier";
 import { JobRunner } from "./jobRunner";
 import { JobContext, StepHelpers, NonRetryableError } from "./jobTypes";
+import { classifyApkResponse } from "./probeClassify";
 export interface JobSettings {
   adbPath: string;
   downloadDirectory: string;
@@ -83,14 +84,6 @@ function originOf(url: string): string {
 function isBotBlock(message: string): boolean {
   return /HTTP (401|403|405|406|429|503)/.test(message);
 }
-const APK_EXTENSIONS = [".apk", ".xapk", ".apks"];
-const APK_MIME_TYPES = [
-  "application/vnd.android.package-archive",
-  "application/octet-stream",
-  "application/zip",
-  "application/x-zip-compressed",
-  "binary/octet-stream",
-];
 const MAX_RESOLVE_HOPS = 4;
 export function registerJobSteps(runner: JobRunner, deps: JobStepDeps): void {
   runner.registerStep("detect_source", (ctx, helpers) =>
@@ -268,8 +261,8 @@ function buildResolveFailureMessage(
 ): string {
   if (blockedReason && isBotBlock(blockedReason)) {
     return browserEnabled
-      ? `The site blocked automated access (${blockedReason}) and the browser engine could not get through either. It may require signing in, or be protected by an anti-bot service.`
-      : `The site blocked automated access (${blockedReason}). Enable the browser fallback engine in Settings and retry.`;
+      ? `The site blocked automated access (${blockedReason}) and the browser could not get through, so it is behind an anti-bot service like Cloudflare. Open the page in your normal browser, download the APK, then use Install from file on the dashboard.`
+      : `The site blocked automated access (${blockedReason}). Turn on the browser fallback and assisted browser mode in Settings, or download the APK in your normal browser and use Install from file.`;
   }
   if (blockedReason) {
     return `Could not load the page: ${blockedReason}`;
@@ -316,26 +309,21 @@ async function probeUrl(
   const dispositionName = parseDispositionFilename(disposition);
   const urlName = filenameFromUrlOrNull(finalUrl);
   const candidateName = dispositionName ?? urlName;
-  const hasApkExtension = candidateName
-    ? APK_EXTENSIONS.some((ext) => candidateName.toLowerCase().endsWith(ext))
-    : false;
-  const pathIsApk = APK_EXTENSIONS.some((ext) =>
-    pathnameOf(finalUrl).endsWith(ext),
-  );
-  const isHtml =
-    mimeType.includes("text/html") || mimeType.includes("application/xhtml");
-  const mimeLooksBinary = APK_MIME_TYPES.some((m) => mimeType.startsWith(m));
+
+  const { isApk, isHtml } = classifyApkResponse({
+    mimeType,
+    candidateName: candidateName ?? null,
+    pathname: pathnameOf(finalUrl),
+    hasDisposition: Boolean(dispositionName),
+  });
+
   const contentRange = response.headers.get("content-range");
   const rawLength = contentRange
     ? contentRange.split("/")[1]
     : response.headers.get("content-length");
   const fileSize =
     rawLength && /^\d+$/.test(rawLength) ? parseInt(rawLength, 10) : undefined;
-  const isApk =
-    !isHtml &&
-    (hasApkExtension ||
-      pathIsApk ||
-      (mimeLooksBinary && Boolean(dispositionName)));
+
   return {
     finalUrl,
     isApk,
@@ -430,6 +418,31 @@ async function downloadFile(
     throw error;
   }
 }
+async function assertLooksLikePackage(filePath: string): Promise<void> {
+  const handle = await open(filePath, "r");
+  try {
+    const { buffer, bytesRead } = await handle.read(
+      Buffer.alloc(64),
+      0,
+      64,
+      0,
+    );
+    const head = buffer.subarray(0, bytesRead);
+    if (head.length >= 2 && head[0] === 0x50 && head[1] === 0x4b) return;
+
+    const text = head.toString("utf8").trimStart().toLowerCase();
+    if (text.startsWith("<") || text.includes("<html")) {
+      throw new NonRetryableError(
+        "The download was an HTML page, not an APK. The site served a block or login page instead of the file. Download it in your normal browser, then use Install from file on the dashboard.",
+      );
+    }
+    throw new NonRetryableError(
+      "The download is not an Android package. The link resolved to the wrong file. Try Install from file with a package you downloaded manually.",
+    );
+  } finally {
+    await handle.close();
+  }
+}
 async function validatePackage(
   ctx: JobContext,
   helpers: StepHelpers,
@@ -438,6 +451,7 @@ async function validatePackage(
   if (!ctx.downloadPath) {
     throw new Error("No downloaded file to validate");
   }
+  await assertLooksLikePackage(ctx.downloadPath);
   const detector = new PackageDetector();
   const packageType = detector.detect(ctx.downloadPath);
   helpers.log("info", `Package type: ${packageType}`);

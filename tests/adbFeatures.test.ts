@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAppPermissions, parsePerformance } from "@adb-engine/adbManager";
 import { matchBloat, catalogSize } from "@adb-engine/bloatCatalog";
+import { classifyApkResponse } from "@core/job-manager/probeClassify";
 
 const DUMPSYS = `
 Packages:
@@ -82,6 +83,59 @@ describe("matchBloat", () => {
 
   it("exposes a non-empty catalog", () => {
     expect(catalogSize()).toBeGreaterThan(20);
+  });
+});
+
+describe("classifyApkResponse", () => {
+  it("rejects a CSS asset served as an attachment", () => {
+    const result = classifyApkResponse({
+      mimeType: "application/octet-stream",
+      candidateName: "base64_v1236.css",
+      pathname: "/assets/base64_v1236.css",
+      hasDisposition: true,
+    });
+    expect(result.isApk).toBe(false);
+  });
+
+  it("accepts a CDN redirector whose disposition names an apk", () => {
+    const result = classifyApkResponse({
+      mimeType: "application/octet-stream",
+      candidateName: "BinManager_2.4.0_apkcombo.com.apk",
+      pathname: "/r2",
+      hasDisposition: true,
+    });
+    expect(result.isApk).toBe(true);
+  });
+
+  it("accepts an extensionless binary download with a disposition", () => {
+    const result = classifyApkResponse({
+      mimeType: "application/octet-stream",
+      candidateName: "download",
+      pathname: "/get/12345",
+      hasDisposition: true,
+    });
+    expect(result.isApk).toBe(true);
+  });
+
+  it("accepts a plain .apk path", () => {
+    const result = classifyApkResponse({
+      mimeType: "application/vnd.android.package-archive",
+      candidateName: "app-1.0.apk",
+      pathname: "/files/app-1.0.apk",
+      hasDisposition: false,
+    });
+    expect(result.isApk).toBe(true);
+  });
+
+  it("flags an HTML block page as not an apk", () => {
+    const result = classifyApkResponse({
+      mimeType: "text/html; charset=utf-8",
+      candidateName: null,
+      pathname: "/blocked",
+      hasDisposition: false,
+    });
+    expect(result.isApk).toBe(false);
+    expect(result.isHtml).toBe(true);
   });
 });
 
