@@ -126,6 +126,11 @@ export const deviceService = {
   logcatStatus: (serial: string) =>
     call(() => api().devices.logcatStatus(serial)),
   performance: (serial: string) => call(() => api().devices.performance(serial)),
+  scrcpyStatus: () => call(() => api().devices.scrcpyStatus()),
+  mirrorStart: (serial: string) => call(() => api().devices.mirrorStart(serial)),
+  mirrorStop: (serial: string) => call(() => api().devices.mirrorStop(serial)),
+  mirrorStatus: (serial: string) =>
+    call(() => api().devices.mirrorStatus(serial)),
   pair: (address: string, code: string) =>
     call(() => api().devices.pair(address, code)),
   connect: (address: string) => call(() => api().devices.connect(address)),

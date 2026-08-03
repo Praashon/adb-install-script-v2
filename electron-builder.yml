@@ -32,6 +32,10 @@ extraResources:
     to: sources/plugins
     filter:
       - "**/*"
+  - from: resources/scrcpy
+    to: scrcpy
+    filter:
+      - "**/*"
   - from: storage
     to: storage
     filter:

@@ -42,3 +42,6 @@ Thumbs.db
 coverage/
 .nyc_output/
 electron.vite.config.*.mjs
+
+resources/scrcpy/*
+!resources/scrcpy/README.md

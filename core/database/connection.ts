@@ -187,6 +187,7 @@ function seedDefaultSettings(): void {
   if (!db) return;
   const defaults: Record<string, string> = {
     "adb.path": "",
+    "scrcpy.path": "",
     "download.directory": "",
     "download.maxConcurrent": "2",
     "download.maxRetries": "3",

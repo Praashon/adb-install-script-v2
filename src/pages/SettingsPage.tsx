@@ -176,6 +176,22 @@ export function SettingsPage() {
               </p>
             </div>
 
+            <div>
+              <label className="label">Custom scrcpy path</label>
+              <input
+                type="text"
+                className="input font-mono text-xs"
+                placeholder="Leave empty to use the bundled or PATH scrcpy"
+                value={settings["scrcpy.path"] ?? ""}
+                onChange={(e) => update("scrcpy.path", e.target.value)}
+                spellCheck={false}
+              />
+              <p className="text-xs text-ink-3 mt-1">
+                Used for screen mirroring. If empty, the app uses a bundled
+                scrcpy or one found on PATH.
+              </p>
+            </div>
+
             <div
               className={cn(
                 "rounded-xl border p-4 flex items-start gap-3",

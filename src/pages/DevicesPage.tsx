@@ -14,6 +14,7 @@ import {
   Video,
   Square,
   Radio,
+  MonitorSmartphone,
   Search,
   AlertTriangle,
   ShieldAlert,
@@ -212,6 +213,50 @@ export function DevicesPage() {
       );
     }
   };
+  const [mirroring, setMirroring] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let active = true;
+    const online = useAppStore
+      .getState()
+      .devices.filter((d) => d.status === "online");
+    (async () => {
+      for (const d of online) {
+        try {
+          const status = await deviceService.mirrorStatus(d.serial);
+          if (active && status.running) {
+            setMirroring((prev) => new Set(prev).add(d.serial));
+          }
+        } catch {
+          void 0;
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+  const toggleMirror = async (serial: string): Promise<void> => {
+    const isOn = mirroring.has(serial);
+    try {
+      if (isOn) {
+        await deviceService.mirrorStop(serial);
+        setMirroring((prev) => {
+          const next = new Set(prev);
+          next.delete(serial);
+          return next;
+        });
+      } else {
+        await deviceService.mirrorStart(serial);
+        setMirroring((prev) => new Set(prev).add(serial));
+        notify.info("Mirroring", "A scrcpy window is opening.");
+      }
+    } catch (error) {
+      notify.error(
+        "Could not mirror",
+        error instanceof Error ? error.message : undefined,
+      );
+    }
+  };
   const goWireless = async (serial: string): Promise<void> => {
     setWirelessBusy(serial);
     try {
@@ -362,12 +407,14 @@ export function DevicesPage() {
             recording={recordingSerial === device.serial}
             savingRecord={savingRecord && recordingSerial === device.serial}
             wirelessBusy={wirelessBusy === device.serial}
+            mirroring={mirroring.has(device.serial)}
             onSetPreferred={() => void setPreferred(device.serial)}
             onDetails={() => void openDetails(device)}
             onApps={() => setAppsDevice(device)}
             onScreenshot={() => void screenshot(device.serial)}
             onToggleRecord={() => void toggleRecord(device.serial)}
             onGoWireless={() => void goWireless(device.serial)}
+            onToggleMirror={() => void toggleMirror(device.serial)}
           />
         ))}
 
@@ -422,12 +469,14 @@ function DeviceCard({
   recording,
   savingRecord,
   wirelessBusy,
+  mirroring,
   onSetPreferred,
   onDetails,
   onApps,
   onScreenshot,
   onToggleRecord,
   onGoWireless,
+  onToggleMirror,
 }: {
   device: Device;
   index: number;
@@ -435,12 +484,14 @@ function DeviceCard({
   recording: boolean;
   savingRecord: boolean;
   wirelessBusy: boolean;
+  mirroring: boolean;
   onSetPreferred: () => void;
   onDetails: () => void;
   onApps: () => void;
   onScreenshot: () => void;
   onToggleRecord: () => void;
   onGoWireless: () => void;
+  onToggleMirror: () => void;
 }) {
   const isOnline = device.status === "online";
   const isUnauthorized = device.status === "unauthorized";
@@ -579,16 +630,33 @@ function DeviceCard({
         </button>
       </div>
 
-      {isOnline && !isWireless && (
-        <button
-          className="btn-secondary w-full py-2 text-xs mt-2"
-          disabled={wirelessBusy}
-          onClick={onGoWireless}
-          title="Switch to a stable Wi-Fi connection on port 5555 and remember it"
-        >
-          <Radio className={cn("w-4 h-4", wirelessBusy && "animate-pulse")} />
-          {wirelessBusy ? "Setting up wireless" : "Go wireless"}
-        </button>
+      {isOnline && (
+        <div className="flex gap-2 mt-2">
+          <button
+            className={cn(
+              "btn-secondary flex-1 py-2 text-xs",
+              mirroring && "text-signal border-signal/40 bg-signal/[0.06]",
+            )}
+            onClick={onToggleMirror}
+            title="Mirror and control the device screen with scrcpy"
+          >
+            <MonitorSmartphone className="w-4 h-4" />
+            {mirroring ? "Stop mirror" : "Mirror"}
+          </button>
+          {!isWireless && (
+            <button
+              className="btn-secondary flex-1 py-2 text-xs"
+              disabled={wirelessBusy}
+              onClick={onGoWireless}
+              title="Switch to a stable Wi-Fi connection on port 5555 and remember it"
+            >
+              <Radio
+                className={cn("w-4 h-4", wirelessBusy && "animate-pulse")}
+              />
+              {wirelessBusy ? "Wireless" : "Go wireless"}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

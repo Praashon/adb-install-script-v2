@@ -22,6 +22,7 @@ import { HealthChecker } from "@adapter-monitor/healthChecker";
 import { AdbManager } from "@adb-engine/adbManager";
 import { cancelAllRecordings } from "@adb-engine/mediaCapture";
 import { LogcatManager } from "@adb-engine/logcatStream";
+import { ScrcpyManager } from "@adb-engine/scrcpy";
 import { DeviceMonitor } from "./deviceMonitor";
 import { WirelessReconnector } from "./wirelessReconnector";
 export interface AppContext {
@@ -44,6 +45,7 @@ export interface AppContext {
   deviceMonitor: DeviceMonitor;
   logcat: LogcatManager;
   wirelessReconnector: WirelessReconnector;
+  scrcpy: ScrcpyManager;
   getSettings(): JobSettings;
   createAdbManager(): AdbManager;
   paths: {
@@ -51,6 +53,7 @@ export interface AppContext {
     userPlugins: string;
     downloads: string;
     work: string;
+    scrcpy: string;
   };
   dispose(): void;
 }
@@ -75,6 +78,9 @@ export async function createAppContext(
     userPlugins: join(userData, "plugins"),
     downloads: join(app.getPath("downloads"), "ADB Installer"),
     work: join(userData, "work"),
+    scrcpy: app.isPackaged
+      ? join(process.resourcesPath, "scrcpy")
+      : join(app.getAppPath(), "resources", "scrcpy"),
   };
   mkdirSync(paths.userPlugins, { recursive: true });
   mkdirSync(paths.work, { recursive: true });
@@ -156,6 +162,11 @@ export async function createAppContext(
     createAdbManager,
     eventBus,
   );
+  const scrcpy = new ScrcpyManager({
+    bundledDir: paths.scrcpy,
+    getAdbPath: () => createAdbManager().getAdbPath(),
+    getOverride: () => settingsRepo.get("scrcpy.path")?.trim() || undefined,
+  });
   const persistLog = (eventName: string, event: AppEvent): void => {
     if (eventName === "job:update") return;
     if (eventName.startsWith("logcat:")) return;
@@ -190,6 +201,7 @@ export async function createAppContext(
     deviceMonitor,
     logcat,
     wirelessReconnector,
+    scrcpy,
     getSettings,
     createAdbManager,
     paths,
@@ -199,6 +211,7 @@ export async function createAppContext(
       cancelAllRecordings();
       logcat.stopAll();
       wirelessReconnector.stop();
+      scrcpy.stopAll();
     },
   };
 }

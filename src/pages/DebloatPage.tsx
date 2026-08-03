@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Sparkles,
+  PackageX,
   ShieldCheck,
   TriangleAlert,
   ShieldAlert,
@@ -321,7 +321,7 @@ function PageHeader() {
   return (
     <header className="will-enter mb-6">
       <p className="eyebrow mb-3 flex items-center gap-2">
-        <Sparkles className="w-3.5 h-3.5 text-signal" />
+        <PackageX className="w-3.5 h-3.5 text-signal" />
         Universal debloater
       </p>
       <h1 className="font-display text-[2rem] leading-[1.1] font-semibold tracking-[-0.02em] text-ink">

@@ -211,6 +211,14 @@ export interface ElectronAPI {
     logcatClear(serial: string): Promise<{ ok: boolean }>;
     logcatStatus(serial: string): Promise<{ running: boolean }>;
     performance(serial: string): Promise<DevicePerformance>;
+    scrcpyStatus(): Promise<{
+      available: boolean;
+      path: string | null;
+      bundled: boolean;
+    }>;
+    mirrorStart(serial: string): Promise<{ running: boolean }>;
+    mirrorStop(serial: string): Promise<{ running: boolean }>;
+    mirrorStatus(serial: string): Promise<{ running: boolean }>;
     pair(
       address: string,
       code: string,
@@ -350,6 +358,10 @@ const api: ElectronAPI = {
     logcatClear: (serial) => ipcRenderer.invoke("device:logcatClear", serial),
     logcatStatus: (serial) => ipcRenderer.invoke("device:logcatStatus", serial),
     performance: (serial) => ipcRenderer.invoke("device:performance", serial),
+    scrcpyStatus: () => ipcRenderer.invoke("device:scrcpyStatus"),
+    mirrorStart: (serial) => ipcRenderer.invoke("device:mirrorStart", serial),
+    mirrorStop: (serial) => ipcRenderer.invoke("device:mirrorStop", serial),
+    mirrorStatus: (serial) => ipcRenderer.invoke("device:mirrorStatus", serial),
     pair: (address, code) => ipcRenderer.invoke("device:pair", address, code),
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),

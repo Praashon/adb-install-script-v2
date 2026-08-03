@@ -616,6 +616,23 @@ function registerDeviceHandlers(ctx: AppContext): void {
     return adb.getPerformance(serial);
   });
 
+  handle("device:scrcpyStatus", () => ctx.scrcpy.status());
+
+  handle("device:mirrorStart", (serial: string) => {
+    ctx.scrcpy.start(serial);
+    ctx.eventBus.adb("info", "Screen mirroring started", { serial });
+    return { running: true };
+  });
+
+  handle("device:mirrorStop", (serial: string) => {
+    ctx.scrcpy.stop(serial);
+    return { running: false };
+  });
+
+  handle("device:mirrorStatus", (serial: string) => {
+    return { running: ctx.scrcpy.isRunning(serial) };
+  });
+
   handle(
     "device:getPermissions",
     async (serial: string, packageName: string) => {
