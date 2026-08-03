@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAppPermissions } from "@adb-engine/adbManager";
+import { parseAppPermissions, parsePerformance } from "@adb-engine/adbManager";
 import { matchBloat, catalogSize } from "@adb-engine/bloatCatalog";
 
 const DUMPSYS = `
@@ -82,5 +82,28 @@ describe("matchBloat", () => {
 
   it("exposes a non-empty catalog", () => {
     expect(catalogSize()).toBeGreaterThan(20);
+  });
+});
+
+describe("parsePerformance", () => {
+  it("computes memory usage from meminfo", () => {
+    const meminfo = "MemTotal:        8000000 kB\nMemAvailable:    2000000 kB\n";
+    const perf = parsePerformance(meminfo, "");
+    expect(perf.memTotalMb).toBe(7813);
+    expect(perf.memUsedPercent).toBe(75);
+  });
+
+  it("reads the total CPU line from dumpsys cpuinfo", () => {
+    const cpuinfo = "Load: 1 / 2 / 3\n 12% TOTAL: 5% user + 6% kernel";
+    expect(parsePerformance("", cpuinfo).cpuPercent).toBe(12);
+  });
+
+  it("returns nulls when the device gives nothing", () => {
+    expect(parsePerformance("", "")).toEqual({
+      cpuPercent: null,
+      memUsedPercent: null,
+      memTotalMb: null,
+      memUsedMb: null,
+    });
   });
 });

@@ -592,6 +592,30 @@ function registerDeviceHandlers(ctx: AppContext): void {
     return { recording: isRecording(serial) };
   });
 
+  handle("device:logcatStart", (serial: string) => {
+    ctx.logcat.start(serial);
+    return { running: true };
+  });
+
+  handle("device:logcatStop", (serial: string) => {
+    ctx.logcat.stop(serial);
+    return { running: false };
+  });
+
+  handle("device:logcatClear", async (serial: string) => {
+    await ctx.logcat.clear(serial);
+    return { ok: true };
+  });
+
+  handle("device:logcatStatus", (serial: string) => {
+    return { running: ctx.logcat.isRunning(serial) };
+  });
+
+  handle("device:performance", async (serial: string) => {
+    const adb = ctx.createAdbManager();
+    return adb.getPerformance(serial);
+  });
+
   handle(
     "device:getPermissions",
     async (serial: string, packageName: string) => {

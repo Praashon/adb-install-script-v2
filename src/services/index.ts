@@ -120,6 +120,12 @@ export const deviceService = {
     permission: string,
     grant: boolean,
   ) => call(() => api().devices.setPermission(serial, packageName, permission, grant)),
+  logcatStart: (serial: string) => call(() => api().devices.logcatStart(serial)),
+  logcatStop: (serial: string) => call(() => api().devices.logcatStop(serial)),
+  logcatClear: (serial: string) => call(() => api().devices.logcatClear(serial)),
+  logcatStatus: (serial: string) =>
+    call(() => api().devices.logcatStatus(serial)),
+  performance: (serial: string) => call(() => api().devices.performance(serial)),
   pair: (address: string, code: string) =>
     call(() => api().devices.pair(address, code)),
   connect: (address: string) => call(() => api().devices.connect(address)),

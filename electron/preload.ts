@@ -56,6 +56,25 @@ export interface AppPermission {
   granted: boolean;
   special: boolean;
 }
+export type LogLevel = "V" | "D" | "I" | "W" | "E" | "F";
+export interface LogLine {
+  id: number;
+  ts: string;
+  pid: string;
+  level: LogLevel;
+  tag: string;
+  message: string;
+}
+export interface LogcatBatch {
+  serial: string;
+  lines: LogLine[];
+}
+export interface DevicePerformance {
+  cpuPercent: number | null;
+  memUsedPercent: number | null;
+  memTotalMb: number | null;
+  memUsedMb: number | null;
+}
 export interface ElectronAPI {
   window: {
     minimize(): void;
@@ -165,6 +184,11 @@ export interface ElectronAPI {
       permission: string,
       grant: boolean,
     ): Promise<{ granted: boolean }>;
+    logcatStart(serial: string): Promise<{ running: boolean }>;
+    logcatStop(serial: string): Promise<{ running: boolean }>;
+    logcatClear(serial: string): Promise<{ ok: boolean }>;
+    logcatStatus(serial: string): Promise<{ running: boolean }>;
+    performance(serial: string): Promise<DevicePerformance>;
     pair(
       address: string,
       code: string,
@@ -278,6 +302,11 @@ const api: ElectronAPI = {
         permission,
         grant,
       ),
+    logcatStart: (serial) => ipcRenderer.invoke("device:logcatStart", serial),
+    logcatStop: (serial) => ipcRenderer.invoke("device:logcatStop", serial),
+    logcatClear: (serial) => ipcRenderer.invoke("device:logcatClear", serial),
+    logcatStatus: (serial) => ipcRenderer.invoke("device:logcatStatus", serial),
+    performance: (serial) => ipcRenderer.invoke("device:performance", serial),
     pair: (address, code) => ipcRenderer.invoke("device:pair", address, code),
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),

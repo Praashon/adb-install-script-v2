@@ -20,6 +20,7 @@ import { FailureTracker } from "@adapter-monitor/failureTracker";
 import { HealthChecker } from "@adapter-monitor/healthChecker";
 import { AdbManager } from "@adb-engine/adbManager";
 import { cancelAllRecordings } from "@adb-engine/mediaCapture";
+import { LogcatManager } from "@adb-engine/logcatStream";
 import { DeviceMonitor } from "./deviceMonitor";
 export interface AppContext {
   db: BetterSQLite3Database<typeof schema>;
@@ -38,6 +39,7 @@ export interface AppContext {
   failureTracker: FailureTracker;
   healthChecker: HealthChecker;
   deviceMonitor: DeviceMonitor;
+  logcat: LogcatManager;
   getSettings(): JobSettings;
   createAdbManager(): AdbManager;
   paths: {
@@ -133,8 +135,19 @@ export async function createAppContext(
     eventBus,
     createAdbManager,
   );
+  const logcat = new LogcatManager(
+    () => createAdbManager().getAdbPath(),
+    (serial, lines) =>
+      eventBus.emit("logcat:batch", {
+        source: "logcat",
+        level: "info",
+        message: "logcat",
+        data: { serial, lines },
+      }),
+  );
   const persistLog = (eventName: string, event: AppEvent): void => {
     if (eventName === "job:update") return;
+    if (eventName.startsWith("logcat:")) return;
     if (event.level === "debug") return;
     logRepo.create({
       level: event.level,
@@ -163,6 +176,7 @@ export async function createAppContext(
     failureTracker,
     healthChecker,
     deviceMonitor,
+    logcat,
     getSettings,
     createAdbManager,
     paths,
@@ -170,6 +184,7 @@ export async function createAppContext(
       unsubscribeLogs();
       deviceMonitor.stop();
       cancelAllRecordings();
+      logcat.stopAll();
     },
   };
 }

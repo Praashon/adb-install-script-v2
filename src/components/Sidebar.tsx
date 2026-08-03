@@ -6,6 +6,7 @@ import {
   ArrowDownToLine,
   Settings2,
   Sparkles,
+  ScrollText,
   Sun,
   Moon,
 } from "lucide-react";
@@ -18,6 +19,7 @@ const navItems = [
   { name: "Sources", path: "/sources", icon: Globe },
   { name: "Devices", path: "/devices", icon: Smartphone },
   { name: "Debloat", path: "/debloat", icon: Sparkles },
+  { name: "Console", path: "/console", icon: ScrollText },
   { name: "Downloads", path: "/downloads", icon: ArrowDownToLine },
   { name: "Settings", path: "/settings", icon: Settings2 },
 ];

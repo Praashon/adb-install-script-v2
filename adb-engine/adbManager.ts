@@ -104,6 +104,37 @@ export function parseAppPermissions(dump: string): AppPermission[] {
       a.permission.localeCompare(b.permission),
   );
 }
+export interface DevicePerformance {
+  cpuPercent: number | null;
+  memUsedPercent: number | null;
+  memTotalMb: number | null;
+  memUsedMb: number | null;
+}
+export function parsePerformance(
+  meminfo: string,
+  cpuinfo: string,
+): DevicePerformance {
+  const totalKb = Number(meminfo.match(/MemTotal:\s+(\d+)\s*kB/)?.[1] ?? 0);
+  const availKb = Number(
+    meminfo.match(/MemAvailable:\s+(\d+)\s*kB/)?.[1] ?? 0,
+  );
+
+  let memUsedPercent: number | null = null;
+  let memTotalMb: number | null = null;
+  let memUsedMb: number | null = null;
+
+  if (totalKb > 0) {
+    const usedKb = Math.max(0, totalKb - availKb);
+    memTotalMb = Math.round(totalKb / 1024);
+    memUsedMb = Math.round(usedKb / 1024);
+    memUsedPercent = Math.round((usedKb / totalKb) * 100);
+  }
+
+  const cpuMatch = cpuinfo.match(/(\d+(?:\.\d+)?)%\s+TOTAL/i);
+  const cpuPercent = cpuMatch ? Math.round(Number(cpuMatch[1])) : null;
+
+  return { cpuPercent, memUsedPercent, memTotalMb, memUsedMb };
+}
 export function describePackageFailure(output: string): string {
   const thrown = output
     .match(/^[\w.$]+(?:Exception|Error):\s*(.+)$/m)?.[1]
@@ -315,6 +346,17 @@ export class AdbManager {
       ["-s", serial, "shell", "pm", "revoke", packageName, permission],
       20000,
     );
+  }
+  async getPerformance(serial: string): Promise<DevicePerformance> {
+    const [meminfo, cpuinfo] = await Promise.all([
+      this.exec(["-s", serial, "shell", "cat", "/proc/meminfo"], 10000)
+        .then((r) => r.stdout)
+        .catch(() => ""),
+      this.exec(["-s", serial, "shell", "dumpsys", "cpuinfo"], 10000)
+        .then((r) => r.stdout)
+        .catch(() => ""),
+    ]);
+    return parsePerformance(meminfo, cpuinfo);
   }
   async uninstall(
     packageName: string,
