@@ -15,6 +15,7 @@ import { DeviceRepository } from "@core/database/repositories/deviceRepository";
 import { SettingsRepository } from "@core/database/repositories/settingsRepository";
 import { InstalledAppRepository } from "@core/database/repositories/installedAppRepository";
 import { LogRepository } from "@core/database/repositories/logRepository";
+import { WirelessDeviceRepository } from "@core/database/repositories/wirelessDeviceRepository";
 import { AdapterManager } from "@source-engine/adapterManager";
 import { FailureTracker } from "@adapter-monitor/failureTracker";
 import { HealthChecker } from "@adapter-monitor/healthChecker";
@@ -22,6 +23,7 @@ import { AdbManager } from "@adb-engine/adbManager";
 import { cancelAllRecordings } from "@adb-engine/mediaCapture";
 import { LogcatManager } from "@adb-engine/logcatStream";
 import { DeviceMonitor } from "./deviceMonitor";
+import { WirelessReconnector } from "./wirelessReconnector";
 export interface AppContext {
   db: BetterSQLite3Database<typeof schema>;
   eventBus: EventBus;
@@ -35,11 +37,13 @@ export interface AppContext {
   settingsRepo: SettingsRepository;
   installedAppRepo: InstalledAppRepository;
   logRepo: LogRepository;
+  wirelessRepo: WirelessDeviceRepository;
   adapterManager: AdapterManager;
   failureTracker: FailureTracker;
   healthChecker: HealthChecker;
   deviceMonitor: DeviceMonitor;
   logcat: LogcatManager;
+  wirelessReconnector: WirelessReconnector;
   getSettings(): JobSettings;
   createAdbManager(): AdbManager;
   paths: {
@@ -62,6 +66,7 @@ export async function createAppContext(
   const settingsRepo = new SettingsRepository(db);
   const installedAppRepo = new InstalledAppRepository(db);
   const logRepo = new LogRepository(db);
+  const wirelessRepo = new WirelessDeviceRepository(db);
   const userData = app.getPath("userData");
   const paths = {
     builtInPlugins: app.isPackaged
@@ -145,6 +150,12 @@ export async function createAppContext(
         data: { serial, lines },
       }),
   );
+  const wirelessReconnector = new WirelessReconnector(
+    wirelessRepo,
+    deviceMonitor,
+    createAdbManager,
+    eventBus,
+  );
   const persistLog = (eventName: string, event: AppEvent): void => {
     if (eventName === "job:update") return;
     if (eventName.startsWith("logcat:")) return;
@@ -172,11 +183,13 @@ export async function createAppContext(
     settingsRepo,
     installedAppRepo,
     logRepo,
+    wirelessRepo,
     adapterManager,
     failureTracker,
     healthChecker,
     deviceMonitor,
     logcat,
+    wirelessReconnector,
     getSettings,
     createAdbManager,
     paths,
@@ -185,6 +198,7 @@ export async function createAppContext(
       deviceMonitor.stop();
       cancelAllRecordings();
       logcat.stopAll();
+      wirelessReconnector.stop();
     },
   };
 }

@@ -667,6 +667,94 @@ function registerDeviceHandlers(ctx: AppContext): void {
     await adb.disconnect(address);
     await ctx.deviceMonitor.refresh();
   });
+
+  handle("wireless:list", () => ctx.wirelessRepo.findAll());
+
+  handle(
+    "wireless:save",
+    (data: { address: string; label: string; autoConnect?: boolean }) => {
+      if (!/^\d{1,3}(\.\d{1,3}){3}:\d+$/.test(data.address.trim())) {
+        throw new Error("Enter an address like 192.168.1.42:5555");
+      }
+      return ctx.wirelessRepo.save({
+        address: data.address.trim(),
+        label: data.label.trim() || data.address.trim(),
+        autoConnect: data.autoConnect,
+      });
+    },
+  );
+
+  handle("wireless:setAutoConnect", (id: string, autoConnect: boolean) => {
+    ctx.wirelessRepo.setAutoConnect(id, autoConnect);
+    if (autoConnect) void ctx.wirelessReconnector.reconnectNow();
+  });
+
+  handle("wireless:remove", (id: string) => ctx.wirelessRepo.remove(id));
+
+  handle("wireless:connect", async (id: string) => {
+    const saved = ctx.wirelessRepo.findAll().find((d) => d.id === id);
+    if (!saved) throw new Error("Saved device not found");
+
+    const adb = ctx.createAdbManager();
+    const result = await adb.connect(saved.address);
+    if (!result.success) throw new Error(result.message || "Connection failed");
+
+    ctx.wirelessRepo.markConnected(saved.address);
+    await ctx.deviceMonitor.refresh();
+    return result;
+  });
+
+  handle("wireless:reconnectAll", async () => {
+    await ctx.wirelessReconnector.reconnectNow();
+    return { ok: true };
+  });
+
+  handle("wireless:stabilize", async (serial: string, label?: string) => {
+    const adb = ctx.createAdbManager();
+
+    const tcp = await adb.tcpip(serial, 5555);
+    if (!tcp.success) {
+      throw new Error(
+        tcp.message ||
+          "Could not switch the device to TCP/IP mode. Connect it over USB first.",
+      );
+    }
+
+    let address = await adb.getWlanAddress(serial, 5555);
+    if (!address) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      address = await adb.getWlanAddress(serial, 5555);
+    }
+    if (!address) {
+      throw new Error(
+        "Switched to TCP/IP mode, but could not read the device Wi-Fi address. Make sure Wi-Fi is on.",
+      );
+    }
+
+    await adb.persistWirelessSettings(serial).catch(() => undefined);
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const connect = await adb.connect(address);
+    const id = ctx.wirelessRepo.save({
+      address,
+      label: label?.trim() || address,
+      autoConnect: true,
+    });
+    if (connect.success) ctx.wirelessRepo.markConnected(address);
+    await ctx.deviceMonitor.refresh();
+
+    return { address, connected: connect.success, id };
+  });
+
+  handle("wireless:keepAwake", async (serial: string) => {
+    const adb = ctx.createAdbManager();
+    const result = await adb.persistWirelessSettings(serial);
+    ctx.eventBus.adb("info", "Applied wireless keep-awake settings", {
+      serial,
+      ...result,
+    });
+    return result;
+  });
   handle("device:adbStatus", async () => {
     const adb = ctx.createAdbManager();
     const version = await adb.getVersion();

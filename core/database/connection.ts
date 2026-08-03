@@ -144,6 +144,16 @@ function runMigrations(): void {
       updated_at INTEGER NOT NULL
     )
   `);
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS wireless_devices (
+      id TEXT PRIMARY KEY,
+      address TEXT NOT NULL UNIQUE,
+      label TEXT NOT NULL,
+      auto_connect INTEGER NOT NULL DEFAULT 1,
+      last_connected_at INTEGER,
+      created_at INTEGER NOT NULL
+    )
+  `);
   db.run(sql`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`);
   db.run(
     sql`CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status)`,

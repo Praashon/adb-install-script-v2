@@ -507,6 +507,76 @@ export class AdbManager {
   async disconnect(address: string): Promise<void> {
     await this.exec(["disconnect", address], 20000).catch(() => undefined);
   }
+  async tcpip(
+    serial: string,
+    port = 5555,
+  ): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      const { stdout, stderr } = await this.exec(
+        ["-s", serial, "tcpip", String(port)],
+        20000,
+      );
+      const output = `${stdout}${stderr}`.trim();
+      return {
+        success: /restarting in tcp mode/i.test(output),
+        message: output,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "tcpip failed",
+      };
+    }
+  }
+  async getWlanAddress(serial: string, port = 5555): Promise<string | null> {
+    for (const iface of ["wlan0", "wlan1"]) {
+      try {
+        const { stdout } = await this.exec(
+          ["-s", serial, "shell", "ip", "-f", "inet", "addr", "show", iface],
+          10000,
+        );
+        const ip = stdout.match(/inet (\d+\.\d+\.\d+\.\d+)/)?.[1];
+        if (ip) return `${ip}:${port}`;
+      } catch {
+        continue;
+      }
+    }
+    try {
+      const { stdout } = await this.exec(
+        ["-s", serial, "shell", "ip", "route"],
+        10000,
+      );
+      const ip = stdout.match(/src (\d+\.\d+\.\d+\.\d+)/)?.[1];
+      if (ip) return `${ip}:${port}`;
+    } catch {
+      return null;
+    }
+    return null;
+  }
+  async persistWirelessSettings(serial: string): Promise<{
+    developerOptions: boolean;
+    wirelessDebugging: boolean;
+  }> {
+    const put = async (key: string): Promise<boolean> => {
+      try {
+        await this.exec(
+          ["-s", serial, "shell", "settings", "put", "global", key, "1"],
+          10000,
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const [developerOptions, wirelessDebugging] = await Promise.all([
+      put("development_settings_enabled"),
+      put("adb_wifi_enabled"),
+    ]);
+    return { developerOptions, wirelessDebugging };
+  }
   async startServer(): Promise<void> {
     await this.exec(["start-server"], 20000).catch(() => undefined);
   }

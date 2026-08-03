@@ -75,6 +75,14 @@ export interface DevicePerformance {
   memTotalMb: number | null;
   memUsedMb: number | null;
 }
+export interface WirelessDevice {
+  id: string;
+  address: string;
+  label: string;
+  autoConnect: boolean;
+  lastConnectedAt: number | null;
+  createdAt: number;
+}
 export interface ElectronAPI {
   window: {
     minimize(): void;
@@ -203,6 +211,26 @@ export interface ElectronAPI {
     disconnect(address: string): Promise<void>;
     adbStatus(): Promise<AdbStatus>;
   };
+  wireless: {
+    list(): Promise<WirelessDevice[]>;
+    save(data: {
+      address: string;
+      label: string;
+      autoConnect?: boolean;
+    }): Promise<string>;
+    setAutoConnect(id: string, autoConnect: boolean): Promise<void>;
+    remove(id: string): Promise<void>;
+    connect(id: string): Promise<{ success: boolean; message: string }>;
+    reconnectAll(): Promise<{ ok: boolean }>;
+    stabilize(
+      serial: string,
+      label?: string,
+    ): Promise<{ address: string; connected: boolean; id: string }>;
+    keepAwake(serial: string): Promise<{
+      developerOptions: boolean;
+      wirelessDebugging: boolean;
+    }>;
+  };
   downloads: {
     getAll(): Promise<unknown[]>;
     getById(id: string): Promise<unknown>;
@@ -311,6 +339,18 @@ const api: ElectronAPI = {
     connect: (address) => ipcRenderer.invoke("device:connect", address),
     disconnect: (address) => ipcRenderer.invoke("device:disconnect", address),
     adbStatus: () => ipcRenderer.invoke("device:adbStatus"),
+  },
+  wireless: {
+    list: () => ipcRenderer.invoke("wireless:list"),
+    save: (data) => ipcRenderer.invoke("wireless:save", data),
+    setAutoConnect: (id, autoConnect) =>
+      ipcRenderer.invoke("wireless:setAutoConnect", id, autoConnect),
+    remove: (id) => ipcRenderer.invoke("wireless:remove", id),
+    connect: (id) => ipcRenderer.invoke("wireless:connect", id),
+    reconnectAll: () => ipcRenderer.invoke("wireless:reconnectAll"),
+    stabilize: (serial, label) =>
+      ipcRenderer.invoke("wireless:stabilize", serial, label),
+    keepAwake: (serial) => ipcRenderer.invoke("wireless:keepAwake", serial),
   },
   downloads: {
     getAll: () => ipcRenderer.invoke("download:getAll"),

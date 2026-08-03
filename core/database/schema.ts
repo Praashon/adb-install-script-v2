@@ -128,6 +128,16 @@ export const settings = sqliteTable("settings", {
   value: text("value").notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
+export const wirelessDevices = sqliteTable("wireless_devices", {
+  id: text("id").primaryKey(),
+  address: text("address").notNull().unique(),
+  label: text("label").notNull(),
+  autoConnect: integer("auto_connect", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  lastConnectedAt: integer("last_connected_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
 export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
 export type AdapterVersion = typeof adapterVersions.$inferSelect;
@@ -143,3 +153,5 @@ export type NewDevice = typeof devices.$inferInsert;
 export type Log = typeof logs.$inferSelect;
 export type NewLog = typeof logs.$inferInsert;
 export type Setting = typeof settings.$inferSelect;
+export type WirelessDevice = typeof wirelessDevices.$inferSelect;
+export type NewWirelessDevice = typeof wirelessDevices.$inferInsert;

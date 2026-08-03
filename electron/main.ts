@@ -64,6 +64,7 @@ async function bootstrap(): Promise<void> {
     }
   });
   context.deviceMonitor.start();
+  context.wirelessReconnector.start();
   await context.jobRunner.recoverPendingJobs();
   startExtensionServer();
 }

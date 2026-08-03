@@ -133,6 +133,19 @@ export const deviceService = {
     call(() => api().devices.disconnect(address)),
   adbStatus: (): Promise<AdbStatus> => call(() => api().devices.adbStatus()),
 };
+export const wirelessService = {
+  list: () => call(() => api().wireless.list()),
+  save: (data: { address: string; label: string; autoConnect?: boolean }) =>
+    call(() => api().wireless.save(data)),
+  setAutoConnect: (id: string, autoConnect: boolean) =>
+    call(() => api().wireless.setAutoConnect(id, autoConnect)),
+  remove: (id: string) => call(() => api().wireless.remove(id)),
+  connect: (id: string) => call(() => api().wireless.connect(id)),
+  reconnectAll: () => call(() => api().wireless.reconnectAll()),
+  stabilize: (serial: string, label?: string) =>
+    call(() => api().wireless.stabilize(serial, label)),
+  keepAwake: (serial: string) => call(() => api().wireless.keepAwake(serial)),
+};
 export const downloadService = {
   getAll: () => call(() => api().downloads.getAll() as Promise<Download[]>),
   getById: (id: string) =>

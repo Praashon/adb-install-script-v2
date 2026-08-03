@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Smartphone,
   RefreshCw,
@@ -13,6 +13,7 @@ import {
   Camera,
   Video,
   Square,
+  Radio,
   Search,
   AlertTriangle,
   ShieldAlert,
@@ -20,8 +21,8 @@ import {
   HardDrive,
   Cpu,
 } from "lucide-react";
-import type { AppPermission } from "../../electron/preload";
-import { deviceService } from "@/services";
+import type { AppPermission, WirelessDevice } from "../../electron/preload";
+import { deviceService, wirelessService } from "@/services";
 import { useAppStore, notify } from "@/stores/appStore";
 import { Modal, ConfirmDialog } from "@/components/Modal";
 import { cn, formatDate } from "@/lib/utils";
@@ -148,6 +149,90 @@ export function DevicesPage() {
       );
     }
   };
+  const [saved, setSaved] = useState<WirelessDevice[]>([]);
+  const [wirelessBusy, setWirelessBusy] = useState<string | null>(null);
+  const loadSaved = useCallback(async () => {
+    try {
+      setSaved(await wirelessService.list());
+    } catch {
+      void 0;
+    }
+  }, []);
+  useEffect(() => {
+    void loadSaved();
+  }, [loadSaved]);
+  const connectSaved = async (device: WirelessDevice): Promise<void> => {
+    setWirelessBusy(device.id);
+    try {
+      await wirelessService.connect(device.id);
+      notify.success("Connected", device.label);
+      await refresh();
+      await loadSaved();
+    } catch (error) {
+      notify.error(
+        "Could not connect",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setWirelessBusy(null);
+    }
+  };
+  const toggleAuto = async (device: WirelessDevice): Promise<void> => {
+    try {
+      await wirelessService.setAutoConnect(device.id, !device.autoConnect);
+      await loadSaved();
+    } catch (error) {
+      notify.error(
+        "Could not update",
+        error instanceof Error ? error.message : undefined,
+      );
+    }
+  };
+  const forget = async (device: WirelessDevice): Promise<void> => {
+    try {
+      await wirelessService.remove(device.id);
+      await loadSaved();
+      notify.info("Removed", device.label);
+    } catch (error) {
+      notify.error(
+        "Could not remove",
+        error instanceof Error ? error.message : undefined,
+      );
+    }
+  };
+  const reconnectAll = async (): Promise<void> => {
+    try {
+      await wirelessService.reconnectAll();
+      await refresh();
+      await loadSaved();
+    } catch (error) {
+      notify.error(
+        "Reconnect failed",
+        error instanceof Error ? error.message : undefined,
+      );
+    }
+  };
+  const goWireless = async (serial: string): Promise<void> => {
+    setWirelessBusy(serial);
+    try {
+      const result = await wirelessService.stabilize(serial);
+      notify.success(
+        result.connected ? "Now wireless" : "Prepared for wireless",
+        result.connected
+          ? `Connected on ${result.address} and saved for auto-reconnect.`
+          : `Saved ${result.address}. It will reconnect when reachable.`,
+      );
+      await refresh();
+      await loadSaved();
+    } catch (error) {
+      notify.error(
+        "Could not switch to wireless",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setWirelessBusy(null);
+    }
+  };
   return (
     <div className="max-w-5xl mx-auto py-6">
       <div className="flex items-center justify-between mb-8">
@@ -195,6 +280,78 @@ export function DevicesPage() {
         </div>
       )}
 
+      {saved.length > 0 && (
+        <section className="will-enter mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="eyebrow">Saved wireless devices</h2>
+            <button
+              className="btn-ghost text-xs py-1.5"
+              onClick={() => void reconnectAll()}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Reconnect all
+            </button>
+          </div>
+          <ul className="panel divide-y divide-line overflow-hidden">
+            {saved.map((entry) => {
+              const online = devices.some(
+                (d) => d.serial === entry.address && d.status === "online",
+              );
+              return (
+                <li
+                  key={entry.id}
+                  className="flex items-center gap-3 px-4 py-3"
+                >
+                  <span
+                    className={cn(
+                      "status-dot",
+                      online ? "bg-verify" : "bg-ink-3",
+                    )}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-ink truncate">{entry.label}</p>
+                    <p className="font-mono text-[11px] text-ink-3 truncate selectable">
+                      {entry.address}
+                    </p>
+                  </div>
+                  <label
+                    className="flex items-center gap-1.5 text-xs text-ink-2 cursor-pointer shrink-0"
+                    title="Reconnect automatically when reachable"
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-signal"
+                      checked={entry.autoConnect}
+                      onChange={() => void toggleAuto(entry)}
+                    />
+                    Auto
+                  </label>
+                  <button
+                    className="btn-secondary py-1.5 text-xs shrink-0"
+                    disabled={online || wirelessBusy === entry.id}
+                    onClick={() => void connectSaved(entry)}
+                  >
+                    <Wifi className="w-3.5 h-3.5" />
+                    {online
+                      ? "Connected"
+                      : wirelessBusy === entry.id
+                        ? "Connecting"
+                        : "Connect"}
+                  </button>
+                  <button
+                    className="btn-icon hover:text-fault shrink-0"
+                    onClick={() => void forget(entry)}
+                    title="Forget"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {devices.map((device, i) => (
           <DeviceCard
@@ -204,11 +361,13 @@ export function DevicesPage() {
             capturing={capturing === device.serial}
             recording={recordingSerial === device.serial}
             savingRecord={savingRecord && recordingSerial === device.serial}
+            wirelessBusy={wirelessBusy === device.serial}
             onSetPreferred={() => void setPreferred(device.serial)}
             onDetails={() => void openDetails(device)}
             onApps={() => setAppsDevice(device)}
             onScreenshot={() => void screenshot(device.serial)}
             onToggleRecord={() => void toggleRecord(device.serial)}
+            onGoWireless={() => void goWireless(device.serial)}
           />
         ))}
 
@@ -250,6 +409,7 @@ export function DevicesPage() {
         onConnected={(data) => {
           setDevices(data);
           setShowConnect(false);
+          void loadSaved();
         }}
       />
     </div>
@@ -261,25 +421,30 @@ function DeviceCard({
   capturing,
   recording,
   savingRecord,
+  wirelessBusy,
   onSetPreferred,
   onDetails,
   onApps,
   onScreenshot,
   onToggleRecord,
+  onGoWireless,
 }: {
   device: Device;
   index: number;
   capturing: boolean;
   recording: boolean;
   savingRecord: boolean;
+  wirelessBusy: boolean;
   onSetPreferred: () => void;
   onDetails: () => void;
   onApps: () => void;
   onScreenshot: () => void;
   onToggleRecord: () => void;
+  onGoWireless: () => void;
 }) {
   const isOnline = device.status === "online";
   const isUnauthorized = device.status === "unauthorized";
+  const isWireless = /^\d{1,3}(\.\d{1,3}){3}:\d+$/.test(device.serial);
   return (
     <div
       className={cn(
@@ -413,6 +578,18 @@ function DeviceCard({
           {recording ? "Stop" : savingRecord ? "Saving" : "Record"}
         </button>
       </div>
+
+      {isOnline && !isWireless && (
+        <button
+          className="btn-secondary w-full py-2 text-xs mt-2"
+          disabled={wirelessBusy}
+          onClick={onGoWireless}
+          title="Switch to a stable Wi-Fi connection on port 5555 and remember it"
+        >
+          <Radio className={cn("w-4 h-4", wirelessBusy && "animate-pulse")} />
+          {wirelessBusy ? "Setting up wireless" : "Go wireless"}
+        </button>
+      )}
     </div>
   );
 }
@@ -1065,8 +1242,11 @@ function WifiConnectModal({
     if (!value) return;
     setIsBusy(true);
     try {
-      const result = await deviceService.connect(value);
-      notify.success("Connected", result.message);
+      await deviceService.connect(value);
+      await wirelessService
+        .save({ address: value, label: value, autoConnect: true })
+        .catch(() => undefined);
+      notify.success("Connected", "Saved for automatic reconnect next time.");
       const devices = await deviceService.list();
       onConnected(devices);
       setAddress("");
