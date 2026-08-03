@@ -13,6 +13,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Eraser,
+  ShieldQuestion,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { downloadService, jobService } from "@/services";
 import { useAppStore, notify } from "@/stores/appStore";
@@ -20,6 +23,7 @@ import { Modal, ConfirmDialog } from "@/components/Modal";
 import { PipelineRail } from "@/components/PipelineRail";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 import { STEP_LABELS, type Download, type Job, type LogEntry } from "@/types";
+import type { ApkAnalysis } from "../../electron/preload";
 export function DownloadsPage() {
   const jobs = useAppStore((s) => s.jobs);
   const setJobs = useAppStore((s) => s.setJobs);
@@ -28,6 +32,7 @@ export function DownloadsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [logJob, setLogJob] = useState<Job | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Download | null>(null);
+  const [analyzeTarget, setAnalyzeTarget] = useState<Download | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const loadDownloads = useCallback(async () => {
@@ -285,6 +290,17 @@ export function DownloadsPage() {
                         <td className="px-6 py-4 text-right whitespace-nowrap">
                           <button
                             className="btn-icon"
+                            onClick={() => setAnalyzeTarget(download)}
+                            disabled={
+                              download.status !== "completed" ||
+                              !download.filePath
+                            }
+                            title="Analyze permissions"
+                          >
+                            <ShieldQuestion className="w-4 h-4" />
+                          </button>
+                          <button
+                            className="btn-icon"
                             onClick={() => void reinstall(download)}
                             disabled={
                               download.status !== "completed" ||
@@ -364,6 +380,11 @@ export function DownloadsPage() {
           setConfirmClear(false);
         }}
         onCancel={() => setConfirmClear(false)}
+      />
+
+      <AnalysisModal
+        download={analyzeTarget}
+        onClose={() => setAnalyzeTarget(null)}
       />
     </div>
   );
@@ -598,6 +619,192 @@ function JobLogModal({
               {entry.message}
             </div>
           ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+const PERMISSION_LABELS: Record<string, string> = {
+  "android.permission.CAMERA": "Camera",
+  "android.permission.RECORD_AUDIO": "Microphone",
+  "android.permission.ACCESS_FINE_LOCATION": "Precise location",
+  "android.permission.ACCESS_COARSE_LOCATION": "Approximate location",
+  "android.permission.ACCESS_BACKGROUND_LOCATION": "Background location",
+  "android.permission.READ_CONTACTS": "Read contacts",
+  "android.permission.WRITE_CONTACTS": "Modify contacts",
+  "android.permission.READ_SMS": "Read SMS",
+  "android.permission.SEND_SMS": "Send SMS",
+  "android.permission.RECEIVE_SMS": "Receive SMS",
+  "android.permission.READ_CALL_LOG": "Read call log",
+  "android.permission.READ_PHONE_STATE": "Phone state",
+  "android.permission.CALL_PHONE": "Place calls",
+  "android.permission.READ_EXTERNAL_STORAGE": "Read storage",
+  "android.permission.WRITE_EXTERNAL_STORAGE": "Write storage",
+  "android.permission.READ_MEDIA_IMAGES": "Read photos",
+  "android.permission.READ_MEDIA_VIDEO": "Read videos",
+  "android.permission.READ_MEDIA_AUDIO": "Read audio",
+  "android.permission.MANAGE_EXTERNAL_STORAGE": "Manage all files",
+  "android.permission.SYSTEM_ALERT_WINDOW": "Draw over other apps",
+  "android.permission.REQUEST_INSTALL_PACKAGES": "Install other apps",
+  "android.permission.BIND_ACCESSIBILITY_SERVICE": "Accessibility control",
+  "android.permission.WRITE_SECURE_SETTINGS": "Write secure settings",
+  "android.permission.BODY_SENSORS": "Body sensors",
+  "android.permission.ACTIVITY_RECOGNITION": "Physical activity",
+  "android.permission.INTERNET": "Internet access",
+  "android.permission.POST_NOTIFICATIONS": "Post notifications",
+};
+
+function labelForPermission(permission: string): string {
+  if (PERMISSION_LABELS[permission]) return PERMISSION_LABELS[permission];
+  const tail = permission.split(".").pop() ?? permission;
+  const words = tail.toLowerCase().split("_");
+  return words
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+function AnalysisModal({
+  download,
+  onClose,
+}: {
+  download: Download | null;
+  onClose: () => void;
+}) {
+  const [analysis, setAnalysis] = useState<ApkAnalysis | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!download) {
+      setAnalysis(null);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    downloadService
+      .analyze(download.id)
+      .then((result) => {
+        if (!cancelled) setAnalysis(result);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          notify.error(
+            "Could not analyze",
+            error instanceof Error ? error.message : undefined,
+          );
+          onClose();
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [download, onClose]);
+
+  const dangerous = analysis?.permissions.filter((p) => p.dangerous) ?? [];
+  const normal = analysis?.permissions.filter((p) => !p.dangerous) ?? [];
+
+  return (
+    <Modal
+      open={Boolean(download)}
+      title="Permission analysis"
+      description={download?.filename}
+      onClose={onClose}
+    >
+      {isLoading ? (
+        <p className="text-sm text-ink-3 py-8 text-center">
+          Reading the manifest...
+        </p>
+      ) : !analysis ? null : (
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="inset-panel px-3.5 py-3">
+              <span className="eyebrow block mb-1">Package</span>
+              <span className="text-sm font-mono text-ink break-all selectable">
+                {analysis.packageName ?? "Unknown"}
+              </span>
+            </div>
+            <div className="inset-panel px-3.5 py-3">
+              <span className="eyebrow block mb-1">Version</span>
+              <span className="text-sm text-ink">
+                {analysis.versionName ?? "?"}
+                {analysis.targetSdk ? ` · SDK ${analysis.targetSdk}` : ""}
+              </span>
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              "panel p-3.5 flex items-center gap-3",
+              dangerous.length > 0
+                ? "border-caution/30 bg-caution/[0.05]"
+                : "border-verify/30 bg-verify/[0.05]",
+            )}
+          >
+            {dangerous.length > 0 ? (
+              <ShieldAlert className="w-5 h-5 text-caution shrink-0" />
+            ) : (
+              <ShieldCheck className="w-5 h-5 text-verify shrink-0" />
+            )}
+            <p className="text-sm text-ink-2">
+              {dangerous.length > 0
+                ? `${dangerous.length} sensitive permission${dangerous.length === 1 ? "" : "s"} out of ${analysis.permissions.length} requested.`
+                : `No sensitive permissions among ${analysis.permissions.length} requested.`}
+            </p>
+          </div>
+
+          {dangerous.length > 0 && (
+            <section>
+              <h3 className="eyebrow mb-2 text-caution">Sensitive</h3>
+              <ul className="panel divide-y divide-line overflow-hidden">
+                {dangerous.map((perm) => (
+                  <li
+                    key={perm.name}
+                    className="flex items-center gap-3 px-4 py-2.5"
+                  >
+                    <ShieldAlert className="w-4 h-4 text-caution shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-ink">
+                        {labelForPermission(perm.name)}
+                      </p>
+                      <p className="font-mono text-[11px] text-ink-3 truncate selectable">
+                        {perm.name}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {normal.length > 0 && (
+            <section>
+              <h3 className="eyebrow mb-2">Other permissions</h3>
+              <ul className="panel divide-y divide-line overflow-hidden">
+                {normal.map((perm) => (
+                  <li
+                    key={perm.name}
+                    className="flex items-center gap-3 px-4 py-2"
+                  >
+                    <span className="text-sm text-ink-2">
+                      {labelForPermission(perm.name)}
+                    </span>
+                    <span className="font-mono text-[11px] text-ink-3 ml-auto truncate selectable">
+                      {perm.name}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {analysis.permissions.length === 0 && (
+            <p className="text-sm text-ink-3 py-6 text-center">
+              This package requests no permissions.
+            </p>
+          )}
         </div>
       )}
     </Modal>

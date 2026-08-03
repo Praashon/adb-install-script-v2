@@ -158,6 +158,7 @@ export const downloadService = {
     call(() => api().downloads.install(id, deviceSerial)),
   clearHistory: (deleteFiles?: boolean) =>
     call(() => api().downloads.clearHistory(deleteFiles)),
+  analyze: (id: string) => call(() => api().downloads.analyze(id)),
 };
 export const settingsService = {
   get: (key: string) => call(() => api().settings.get(key)),

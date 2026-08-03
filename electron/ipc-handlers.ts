@@ -789,6 +789,19 @@ function registerDownloadHandlers(ctx: AppContext): void {
     const error = await shell.openPath(download.filePath);
     if (error) throw new Error(error);
   });
+
+  handle("download:analyze", async (id: string) => {
+    const download = ctx.downloadRepo.findById(id);
+    if (!download?.filePath) {
+      throw new Error("This download has no file on disk");
+    }
+    const { existsSync } = await import("fs");
+    if (!existsSync(download.filePath)) {
+      throw new Error("The file for this download is no longer on disk");
+    }
+    const { analyzeApkFile } = await import("@apk-engine/apkAnalyzer");
+    return analyzeApkFile(download.filePath);
+  });
   handle("download:install", async (id: string, deviceSerial?: string) => {
     const download = ctx.downloadRepo.findById(id);
     if (!download) throw new Error("Download not found");
