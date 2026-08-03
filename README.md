@@ -1,4 +1,4 @@
-# ADB APK Installer Pro
+# ADB APK Installer Pro - MAJOR UPDATE
 
 ## Overview
 ADB APK Installer Pro is a simple desktop app for Windows. It helps you manage, download, and install Android apps to your connected devices. It connects your computer to online APK sources and lets you install apps quickly using ADB.

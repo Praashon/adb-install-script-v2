@@ -1,5 +1,5 @@
 appId: com.adb-installer-pro.app
-productName: ADB APK Installer Pro
+productName: ADB APK Installer Pro - MAJOR UPDATE
 directories:
   buildResources: resources
   output: release
@@ -24,7 +24,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: ADB APK Installer Pro
+  shortcutName: ADB APK Installer Pro - MAJOR UPDATE
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico
 extraResources:
