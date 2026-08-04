@@ -4,7 +4,7 @@
 ADB APK Installer Pro is a premier desktop application designed for Windows. It empowers you to effortlessly manage, download, and install Android applications directly to your connected devices. By bridging your computer with online APK sources, the software facilitates rapid app installation through a robust ADB integration.
 
 ## What's New in Version 2.0
-We are thrilled to announce a substantial leap forward in Android device management. Version 2.0 introduces a suite of powerful capabilities engineered to streamline your workflow and provide unprecedented control.
+I am thrilled to announce a substantial leap forward in Android device management. Version 2.0 introduces a suite of powerful capabilities engineered to streamline your workflow and provide unprecedented control.
 
 * Integrated Screen Mirroring: Seamlessly view and control your device screen directly from your desktop using the newly integrated scrcpy engine.
 * Advanced Wireless Connectivity: Say goodbye to cables with the new Wireless Pairing Wizard for Android 11 and above. Your devices will now persistently auto-reconnect for a frictionless experience.
