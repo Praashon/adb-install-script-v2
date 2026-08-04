@@ -1,63 +1,84 @@
 # ADB APK Installer Pro - MAJOR UPDATE
 
 ## Overview
-ADB APK Installer Pro is a simple desktop app for Windows. It helps you manage, download, and install Android apps to your connected devices. It connects your computer to online APK sources and lets you install apps quickly using ADB.
+ADB APK Installer Pro is a premier desktop application designed for Windows. It empowers you to effortlessly manage, download, and install Android applications directly to your connected devices. By bridging your computer with online APK sources, the software facilitates rapid app installation through a robust ADB integration.
 
-## Why Use This App?
-The main goal of this app is to make installing Android apps easy. Instead of doing things by hand, you can track sources, download files in the background, and use ADB commands all from one clean dashboard. This saves a lot of time for testing and setting up devices.
+## What's New in Version 2.0
+We are thrilled to announce a substantial leap forward in Android device management. Version 2.0 introduces a suite of powerful capabilities engineered to streamline your workflow and provide unprecedented control.
 
-## Features
-* Auto Detect Devices: The app finds your connected Android devices or emulators right away.
-* Easy Downloads: You can queue, track, and resume multiple APK downloads at the same time.
-* Manage Sources: Add your favorite online APK links or repositories to keep a personal library.
-* Safe Browsing: All online links are kept separate so your computer stays safe.
-* Clean Design: The dashboard is built to be fast, clear, and very easy to look at.
+* Integrated Screen Mirroring: Seamlessly view and control your device screen directly from your desktop using the newly integrated scrcpy engine.
+* Advanced Wireless Connectivity: Say goodbye to cables with the new Wireless Pairing Wizard for Android 11 and above. Your devices will now persistently auto-reconnect for a frictionless experience.
+* Pre-Install Permission Analyzer: Maintain absolute security by thoroughly reviewing requested APK permissions before initiating any installation.
+* Drag and Drop Bulk Installation: Drastically reduce setup time by dragging and dropping multiple APK files for simultaneous batch installation.
+* Pro Developer Tools: Dive deep into device diagnostics with a live Logcat console and real-time performance monitoring.
+* Instant Media Capture: Capture high-quality screenshots and record screen activity instantly with dedicated tools.
+* Uncompromised Stability: Enjoy a flawless experience with comprehensive fixes addressing stuck offline devices and download routing inaccuracies.
 
-## Installation
+## Why Choose This Platform?
+The primary objective of this application is to completely eliminate the friction of Android app management. Rather than executing tedious manual operations, you can now track sources, process background downloads, and deploy advanced ADB commands from a single, elegantly designed dashboard. This translates to massive time savings for device configuration and testing environments.
 
-### What You Need First
-1. Node.js (Version 20.0.0 or higher is best)
-2. Git
-3. An Android device with USB Debugging turned on (or an active emulator)
-4. ADB installed and added to your system PATH
+## Core Features
+* Automatic Device Detection: Instantly recognizes connected Android devices and active emulators upon launch.
+* Intelligent Downloads: Queue, monitor, and resume multiple parallel APK downloads with complete reliability.
+* Source Management: Curate a personal library by adding your preferred online APK repositories and links.
+* Isolated Safe Browsing: All external links are processed in an isolated environment to ensure maximum system security.
+* Elegant Interface: A meticulously crafted dashboard that prioritizes speed, clarity, and visual excellence.
 
-### Setup Steps
-Open your terminal and run these commands:
+## Getting Started
 
-1. Clone the project:
+### Quick Install (Recommended)
+The easiest way to get started is to download the pre-compiled Windows executable.
+1. Visit the [Releases Page](https://github.com/Praashon/adb-install-script/releases)
+2. Download the latest `ADB APK Installer Pro-Setup.exe` file.
+3. Run the installer and follow the on-screen prompts.
+
+### Build From Source
+If you prefer to compile the application yourself, follow these instructions.
+
+#### Prerequisites
+1. Node.js (Version 20.0.0 or higher recommended)
+2. Git version control
+3. An Android device with USB Debugging enabled (or an active emulator)
+4. ADB installed and configured in your system PATH
+
+### Installation Guide
+Launch your preferred terminal and execute the following sequence:
+
+1. Clone the repository:
    ```bash
    git clone https://github.com/Praashon/adb-install-script.git
    ```
 
-2. Open the project folder:
+2. Navigate to the project directory:
    ```bash
    cd adb-install-script
    ```
 
-3. Install the required files:
+3. Install dependencies:
    ```bash
    npm install
    ```
 
-4. Start the app in development mode:
+4. Launch the development environment:
    ```bash
    npm run dev
    ```
 
-5. (Optional) Build the app for normal use:
+5. (Optional) Compile for production use:
    ```bash
    npm run build
    npm run package
    ```
 
-## How to Use It
+   
+## Usage Instructions
 
-1. Connect Your Device: Plug your Android device into your computer. Make sure USB Debugging is allowed. The app will find your device and show it on the dashboard.
-2. Add a Source: Go to the Sources section. Here you can add your favorite APK links.
-3. Download an App: Look through your sources and pick an APK to download. The app will handle the file transfer for you.
-4. Install with ADB: When the download is done, click the install button next to the file. The app will push the APK to your device and install it automatically.
+1. Connect Your Device: Interface your Android device with your computer via USB or wireless debugging. Ensure USB Debugging is authorized. The dashboard will instantly register and display your device.
+2. Configure Sources: Navigate to the Sources module to input your trusted APK repository links.
+3. Initiate Downloads: Browse your configured sources and select an APK. The integrated download engine will seamlessly process the file transfer.
+4. Deploy via ADB: Upon download completion, engage the install action adjacent to the file. The application will autonomously push and install the APK to your selected device.
 
-## Built With
+## Technology Stack
 * Electron
 * React
 * TypeScript
