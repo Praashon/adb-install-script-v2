@@ -1,5 +1,6 @@
 import { join, extname, basename } from "path";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, statSync } from "fs";
+import AdmZip from "adm-zip";
 import { rm, open } from "fs/promises";
 import { EventBus } from "@core/event-bus/eventBus";
 import { JobRepository } from "@core/database/repositories/jobRepository";
@@ -17,6 +18,10 @@ import { DownloadVerifier } from "@download-engine/verifier";
 import { BrowserDownloadStrategy } from "@download-engine/strategies";
 import { PackageDetector } from "@apk-engine/packageDetector";
 import { ApkValidator } from "@apk-engine/apkValidator";
+import {
+  SignatureInspector,
+  describeSignature,
+} from "@apk-engine/signatureInspector";
 import { Extractor } from "@apk-engine/extractor";
 import { Fingerprint } from "@apk-engine/fingerprint/fingerprint";
 import { PackageType } from "@apk-engine/types";
@@ -570,6 +575,7 @@ async function installApk(
   const device = await selectDevice(ctx, adb, deps);
   helpers.log("info", `Installing to ${device.model || device.serial}`);
   helpers.setStepProgress(0.15);
+  reportSignatures(apkFiles, helpers);
   const installer = new Installer(deps.eventBus, adb.getAdbPath());
   const options = {
     serial: device.serial,
@@ -582,13 +588,16 @@ async function installApk(
       ? await installer.installMultiple(apkFiles, options)
       : await installer.installSingle(apkFiles[0], options);
   if (!result.success) {
+    const message = result.error ?? "Installation failed";
     if (ctx.sourceId) {
-      deps.failureTracker.recordFailure(
-        ctx.sourceId,
-        result.error ?? "Installation failed",
+      deps.failureTracker.recordFailure(ctx.sourceId, message);
+    }
+    if (result.permanent) {
+      throw new NonRetryableError(
+        withSignatureHint(message, result.errorCode, apkFiles),
       );
     }
-    throw new Error(result.error ?? "Installation failed");
+    throw new Error(message);
   }
   helpers.setStepProgress(0.7);
   const obbFiles = ctx.obbFiles ?? [];
@@ -617,6 +626,53 @@ async function installApk(
     deviceSerial: device.serial,
     deviceId: deviceRow?.id ?? ctx.deviceId,
   };
+}
+function reportSignatures(apkFiles: string[], helpers: StepHelpers): void {
+  const inspector = new SignatureInspector();
+  for (const file of apkFiles) {
+    let info;
+    try {
+      const zip = new AdmZip(file);
+      info = inspector.inspect(
+        file,
+        zip.getEntries().map((e) => e.entryName),
+      );
+    } catch {
+      helpers.log(
+        "warn",
+        `${basename(file)} could not be opened as a zip archive, the file is probably truncated`,
+      );
+      continue;
+    }
+    if (info.signed) {
+      helpers.log(
+        "info",
+        `${basename(file)} is signed (${describeSignature(info)})`,
+      );
+    } else {
+      helpers.log(
+        "warn",
+        `${basename(file)} carries no signature (no v1 JAR signature and no APK Signing Block). Android will refuse to install it. This normally means the download is incomplete or the package was repacked without being re-signed.`,
+      );
+    }
+  }
+}
+function withSignatureHint(
+  message: string,
+  errorCode: string | undefined,
+  apkFiles: string[],
+): string {
+  if (errorCode !== "INSTALL_PARSE_FAILED_NO_CERTIFICATES") return message;
+  const sizes = apkFiles
+    .map((file) => {
+      try {
+        return `${basename(file)} is ${formatBytes(statSync(file).size)}`;
+      } catch {
+        return `${basename(file)} is unreadable`;
+      }
+    })
+    .join(", ");
+  return `${message} Checked file: ${sizes}. If that size looks smaller than the real app, the download was truncated, so fetch the package again or use Install from file.`;
 }
 async function selectDevice(
   ctx: JobContext,

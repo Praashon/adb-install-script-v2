@@ -1,5 +1,6 @@
 import AdmZip from "adm-zip";
 import { statSync } from "fs";
+import { SignatureInfo, SignatureInspector } from "./signatureInspector";
 export interface ValidationResult {
   valid: boolean;
   errors: string[];
@@ -8,6 +9,7 @@ export interface ValidationResult {
   hasResources: boolean;
   entryCount: number;
   fileSize: number;
+  signature?: SignatureInfo;
 }
 const MIN_APK_SIZE = 1024;
 const MAX_APK_SIZE = 4 * 1024 * 1024 * 1024;
@@ -18,6 +20,7 @@ export class ApkValidator {
     let hasDex = false;
     let hasResources = false;
     let entryCount = 0;
+    let signature: SignatureInfo | undefined;
     const stat = statSync(filePath);
     const fileSize = stat.size;
     if (fileSize < MIN_APK_SIZE) {
@@ -33,7 +36,9 @@ export class ApkValidator {
       if (entryCount === 0) {
         errors.push("APK archive is empty");
       }
+      const entryNames: string[] = [];
       for (const entry of entries) {
+        entryNames.push(entry.entryName);
         if (entry.entryName === "AndroidManifest.xml") {
           hasManifest = true;
         }
@@ -53,6 +58,7 @@ export class ApkValidator {
       if (!hasDex) {
         errors.push("Missing classes.dex");
       }
+      signature = new SignatureInspector().inspect(filePath, entryNames);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       errors.push(`Failed to read APK archive: ${message}`);
@@ -65,6 +71,7 @@ export class ApkValidator {
       hasResources,
       entryCount,
       fileSize,
+      signature,
     };
   }
   isValidArchive(filePath: string): boolean {

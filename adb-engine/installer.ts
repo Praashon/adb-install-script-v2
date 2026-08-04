@@ -3,10 +3,59 @@ import { promisify } from "util";
 import { basename } from "path";
 import { EventBus } from "@core/event-bus/eventBus";
 const execFileAsync = promisify(execFile);
+const ERROR_MESSAGES: Record<string, string> = {
+  INSTALL_FAILED_ALREADY_EXISTS: "Application already exists on the device.",
+  INSTALL_FAILED_INVALID_APK: "The APK file is invalid or corrupted.",
+  INSTALL_FAILED_INSUFFICIENT_STORAGE:
+    "Not enough storage space on the device.",
+  INSTALL_FAILED_DUPLICATE_PACKAGE:
+    "A package with the same name already exists.",
+  INSTALL_FAILED_VERSION_DOWNGRADE:
+    'A newer version is already installed. Enable "Allow downgrade" in Settings to replace it.',
+  INSTALL_FAILED_UPDATE_INCOMPATIBLE:
+    "Signed with a different certificate than the installed app. Uninstall the existing app first.",
+  INSTALL_PARSE_FAILED_NO_CERTIFICATES:
+    "Android rejected this package because it carries no signature. Android cannot install an unsigned APK, and this cannot be bypassed from the PC. The usual cause is a corrupted or incomplete download rather than a genuinely unsigned build.",
+  INSTALL_PARSE_FAILED_INCONSISTENT_CERTIFICATES:
+    "The package has inconsistent signatures across its files, which usually means it was repacked without being re-signed.",
+  INSTALL_PARSE_FAILED_NOT_APK:
+    "This file is not an Android package. The download most likely returned the wrong file.",
+  INSTALL_FAILED_OLDER_SDK:
+    "This APK requires a newer Android version than the device has.",
+  INSTALL_FAILED_TEST_ONLY:
+    "This is a test-only APK and cannot be installed normally.",
+  INSTALL_FAILED_NO_MATCHING_ABIS:
+    "The APK does not support this device's CPU architecture.",
+  INSTALL_FAILED_USER_RESTRICTED:
+    'The device blocked the install. Accept the prompt on your device or enable "Install via USB".',
+  INSTALL_FAILED_MISSING_SPLIT:
+    "Missing split APKs, install the full bundle instead.",
+  INSTALL_FAILED_VERIFICATION_FAILURE:
+    'Play Protect blocked the install. Disable "Verify apps over USB" on the device.',
+};
+const PERMANENT_CODES = new Set([
+  "INSTALL_FAILED_ALREADY_EXISTS",
+  "INSTALL_FAILED_INVALID_APK",
+  "INSTALL_FAILED_INSUFFICIENT_STORAGE",
+  "INSTALL_FAILED_DUPLICATE_PACKAGE",
+  "INSTALL_FAILED_VERSION_DOWNGRADE",
+  "INSTALL_FAILED_UPDATE_INCOMPATIBLE",
+  "INSTALL_PARSE_FAILED_NO_CERTIFICATES",
+  "INSTALL_PARSE_FAILED_INCONSISTENT_CERTIFICATES",
+  "INSTALL_PARSE_FAILED_NOT_APK",
+  "INSTALL_FAILED_OLDER_SDK",
+  "INSTALL_FAILED_TEST_ONLY",
+  "INSTALL_FAILED_NO_MATCHING_ABIS",
+  "INSTALL_FAILED_USER_RESTRICTED",
+  "INSTALL_FAILED_MISSING_SPLIT",
+  "INSTALL_FAILED_VERIFICATION_FAILURE",
+]);
 export interface InstallResult {
   success: boolean;
   packageName?: string;
   error?: string;
+  errorCode?: string;
+  permanent?: boolean;
   output: string;
   duration: number;
 }
@@ -118,9 +167,9 @@ export class Installer {
       const output = `${stdout}${stderr}`;
       const duration = Date.now() - startTime;
       if (!/success/i.test(output)) {
-        const error = this.parseInstallError(output);
+        const { error, errorCode, permanent } = this.classifyFailure(output);
         this.eventBus.adb("error", `Installation failed: ${error}`, { output });
-        return { success: false, error, output, duration };
+        return { success: false, error, errorCode, permanent, output, duration };
       }
       this.eventBus.adb("info", "Installed successfully", { duration });
       return { success: true, output, duration };
@@ -135,14 +184,21 @@ export class Installer {
         return {
           success: false,
           error: `ADB executable not found at "${this.adbPath}". Check the ADB path in Settings.`,
+          permanent: true,
           output,
           duration,
         };
       }
-      const message = output.trim()
-        ? this.parseInstallError(output)
-        : err.message || "Unknown error";
-      return { success: false, error: message, output, duration };
+      if (output.trim()) {
+        const { error, errorCode, permanent } = this.classifyFailure(output);
+        return { success: false, error, errorCode, permanent, output, duration };
+      }
+      return {
+        success: false,
+        error: err.message || "Unknown error",
+        output,
+        duration,
+      };
     }
   }
   private installFlags(options: InstallOptions): string[] {
@@ -154,34 +210,31 @@ export class Installer {
   private buildArgs(options: InstallOptions, args: string[]): string[] {
     return options.serial ? ["-s", options.serial, ...args] : args;
   }
+  private classifyFailure(output: string): {
+    error: string;
+    errorCode?: string;
+    permanent: boolean;
+  } {
+    const code = Object.keys(ERROR_MESSAGES).find((c) => output.includes(c));
+    if (code) {
+      return {
+        error: ERROR_MESSAGES[code],
+        errorCode: code,
+        permanent: PERMANENT_CODES.has(code),
+      };
+    }
+    const parseFailure = output.match(/INSTALL_PARSE_FAILED_[A-Z_]+/);
+    if (parseFailure) {
+      return {
+        error: `The package could not be parsed by Android (${parseFailure[0]}). The file is most likely corrupted or incomplete.`,
+        errorCode: parseFailure[0],
+        permanent: true,
+      };
+    }
+    return { error: this.parseInstallError(output), permanent: false };
+  }
   private parseInstallError(output: string): string {
-    const errorMap: Record<string, string> = {
-      INSTALL_FAILED_ALREADY_EXISTS:
-        "Application already exists on the device.",
-      INSTALL_FAILED_INVALID_APK: "The APK file is invalid or corrupted.",
-      INSTALL_FAILED_INSUFFICIENT_STORAGE:
-        "Not enough storage space on the device.",
-      INSTALL_FAILED_DUPLICATE_PACKAGE:
-        "A package with the same name already exists.",
-      INSTALL_FAILED_VERSION_DOWNGRADE:
-        'A newer version is already installed. Enable "Allow downgrade" in Settings to replace it.',
-      INSTALL_FAILED_UPDATE_INCOMPATIBLE:
-        "Signed with a different certificate than the installed app. Uninstall the existing app first.",
-      INSTALL_PARSE_FAILED_NO_CERTIFICATES: "The APK is not properly signed.",
-      INSTALL_FAILED_OLDER_SDK:
-        "This APK requires a newer Android version than the device has.",
-      INSTALL_FAILED_TEST_ONLY:
-        "This is a test-only APK and cannot be installed normally.",
-      INSTALL_FAILED_NO_MATCHING_ABIS:
-        "The APK does not support this device's CPU architecture.",
-      INSTALL_FAILED_USER_RESTRICTED:
-        'The device blocked the install. Accept the prompt on your device or enable "Install via USB".',
-      INSTALL_FAILED_MISSING_SPLIT:
-        "Missing split APKs, install the full bundle instead.",
-      INSTALL_FAILED_VERIFICATION_FAILURE:
-        'Play Protect blocked the install. Disable "Verify apps over USB" on the device.',
-    };
-    for (const [code, message] of Object.entries(errorMap)) {
+    for (const [code, message] of Object.entries(ERROR_MESSAGES)) {
       if (output.includes(code)) return message;
     }
     if (/device unauthorized/i.test(output)) {
