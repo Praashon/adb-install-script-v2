@@ -165,6 +165,7 @@ export const downloadService = {
   clearHistory: (deleteFiles?: boolean) =>
     call(() => api().downloads.clearHistory(deleteFiles)),
   analyze: (id: string) => call(() => api().downloads.analyze(id)),
+  analyzeFile: () => call(() => api().downloads.analyzeFile()),
 };
 export const settingsService = {
   get: (key: string) => call(() => api().settings.get(key)),

@@ -1,3 +1,4 @@
+import { assertPackageName, validateAdbArguments } from "./arguments";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { existsSync } from "fs";
@@ -12,6 +13,7 @@ export interface AdbDevice {
   androidVersion: string;
   architecture: string;
   sdkVersion?: string;
+  supportedAbis?: string[];
   batteryLevel?: number;
   storageFree?: string;
   isEmulator?: boolean;
@@ -123,7 +125,7 @@ export function parsePerformance(
   let memTotalMb: number | null = null;
   let memUsedMb: number | null = null;
 
-  if (totalKb > 0) {
+  if (totalKb > 0 && /MemAvailable:\s+\d+\s*kB/.test(meminfo)) {
     const usedKb = Math.max(0, totalKb - availKb);
     memTotalMb = Math.round(totalKb / 1024);
     memUsedMb = Math.round(usedKb / 1024);
@@ -295,6 +297,7 @@ export class AdbManager {
     packageName: string,
     serial: string,
   ): Promise<string[]> {
+    assertPackageName(packageName);
     const { stdout } = await this.exec(
       ["-s", serial, "shell", "pm", "path", packageName],
       30000,
@@ -311,6 +314,7 @@ export class AdbManager {
     localPath: string,
     serial: string,
   ): Promise<void> {
+    validateAdbArguments(["-s", serial]);
     await execFileAsync(
       this.adbPath,
       ["-s", serial, "pull", devicePath, localPath],
@@ -321,6 +325,7 @@ export class AdbManager {
     packageName: string,
     serial: string,
   ): Promise<AppPermission[]> {
+    assertPackageName(packageName);
     const { stdout } = await this.exec(
       ["-s", serial, "shell", "dumpsys", "package", packageName],
       30000,
@@ -332,6 +337,8 @@ export class AdbManager {
     permission: string,
     serial: string,
   ): Promise<void> {
+    assertPackageName(packageName);
+    assertPackageName(permission);
     await this.exec(
       ["-s", serial, "shell", "pm", "grant", packageName, permission],
       20000,
@@ -342,6 +349,8 @@ export class AdbManager {
     permission: string,
     serial: string,
   ): Promise<void> {
+    assertPackageName(packageName);
+    assertPackageName(permission);
     await this.exec(
       ["-s", serial, "shell", "pm", "revoke", packageName, permission],
       20000,
@@ -362,12 +371,14 @@ export class AdbManager {
     packageName: string,
     serial: string,
   ): Promise<UninstallResult> {
+    assertPackageName(packageName);
     return this.runUninstall(["-s", serial, "uninstall", packageName], "full");
   }
   async uninstallForUser(
     packageName: string,
     serial: string,
   ): Promise<UninstallResult> {
+    assertPackageName(packageName);
     return this.runUninstall(
       ["-s", serial, "shell", "pm", "uninstall", "--user", "0", packageName],
       "user",
@@ -377,6 +388,7 @@ export class AdbManager {
     packageName: string,
     serial: string,
   ): Promise<UninstallResult> {
+    assertPackageName(packageName);
     return this.runStateChange(
       ["-s", serial, "shell", "pm", "disable-user", "--user", "0", packageName],
       /new state:\s*disabled/i,
@@ -386,6 +398,7 @@ export class AdbManager {
     packageName: string,
     serial: string,
   ): Promise<UninstallResult> {
+    assertPackageName(packageName);
     return this.runStateChange(
       ["-s", serial, "shell", "pm", "enable", "--user", "0", packageName],
       /new state:\s*enabled/i,
@@ -395,6 +408,7 @@ export class AdbManager {
     args: string[],
     successPattern: RegExp,
   ): Promise<UninstallResult> {
+    validateAdbArguments(args);
     try {
       const { stdout, stderr } = await execFileAsync(this.adbPath, args, {
         timeout: 60000,
@@ -426,6 +440,7 @@ export class AdbManager {
     args: string[],
     mode: "full" | "user",
   ): Promise<UninstallResult> {
+    validateAdbArguments(args);
     try {
       const { stdout, stderr } = await execFileAsync(this.adbPath, args, {
         timeout: 60000,
@@ -562,27 +577,6 @@ export class AdbManager {
     }
     return null;
   }
-  async persistWirelessSettings(serial: string): Promise<{
-    developerOptions: boolean;
-    wirelessDebugging: boolean;
-  }> {
-    const put = async (key: string): Promise<boolean> => {
-      try {
-        await this.exec(
-          ["-s", serial, "shell", "settings", "put", "global", key, "1"],
-          10000,
-        );
-        return true;
-      } catch {
-        return false;
-      }
-    };
-    const [developerOptions, wirelessDebugging] = await Promise.all([
-      put("development_settings_enabled"),
-      put("adb_wifi_enabled"),
-    ]);
-    return { developerOptions, wirelessDebugging };
-  }
   async startServer(): Promise<void> {
     await this.exec(["start-server"], 20000).catch(() => undefined);
   }
@@ -625,6 +619,7 @@ export class AdbManager {
     androidVersion: string;
     architecture: string;
     sdkVersion: string;
+    supportedAbis: string[];
   }> {
     const getProp = async (prop: string): Promise<string> => {
       try {
@@ -640,15 +635,16 @@ export class AdbManager {
         return "";
       }
     };
-    const [model, manufacturer, androidVersion, architecture, sdkVersion] =
+    const [model, manufacturer, androidVersion, architecture, sdkVersion, abiList] =
       await Promise.all([
         getProp("ro.product.model"),
         getProp("ro.product.manufacturer"),
         getProp("ro.build.version.release"),
         getProp("ro.product.cpu.abi"),
         getProp("ro.build.version.sdk"),
+        getProp("ro.product.cpu.abilist"),
       ]);
-    return { model, manufacturer, androidVersion, architecture, sdkVersion };
+    return { model, manufacturer, androidVersion, architecture, sdkVersion, supportedAbis: (abiList || architecture).split(",").filter(Boolean) };
   }
   private async exec(
     args: string[],
@@ -658,6 +654,7 @@ export class AdbManager {
     stdout: string;
     stderr: string;
   }> {
+    validateAdbArguments(args);
     try {
       return await execFileAsync(this.adbPath, args, {
         timeout,

@@ -1,3 +1,4 @@
+import { assertSerial } from "./arguments";
 import { execFile, spawn, ChildProcess } from "child_process";
 import { promisify } from "util";
 import { writeFile } from "fs/promises";
@@ -16,6 +17,7 @@ export async function captureScreenshot(
   serial: string,
   localPath: string,
 ): Promise<void> {
+  assertSerial(serial);
   const { stdout } = await execFileAsync(
     adbPath,
     ["-s", serial, "exec-out", "screencap", "-p"],
@@ -39,6 +41,7 @@ export function isRecording(serial: string): boolean {
 }
 
 export function startRecording(adbPath: string, serial: string): string {
+  assertSerial(serial);
   if (recordings.has(serial)) {
     throw new Error("A recording is already in progress for this device.");
   }
@@ -63,6 +66,7 @@ export async function stopRecording(
   serial: string,
   localPath: string,
 ): Promise<void> {
+  assertSerial(serial);
   const active = recordings.get(serial);
   if (!active) {
     throw new Error("No recording is in progress for this device.");

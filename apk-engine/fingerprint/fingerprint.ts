@@ -1,3 +1,7 @@
+import { extractManifestInfo } from "../manifest/axml";
+import { inspectSignature } from "../signature";
+import { validateEntries } from "../../scripts/safe-archive.cjs";
+import { dirname } from "path";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import { createHash } from "crypto";
@@ -8,7 +12,8 @@ export class Fingerprint {
     const sha256 = await this.computeSha256(filePath);
     const fileSize = (await stat(filePath)).size;
     const manifest = this.readManifestInfo(filePath);
-    const certificate = this.extractCertificate(filePath);
+    const signature = await inspectSignature(filePath);
+    const certificate = signature.status === "verified" ? signature.certificateSha256.join(",") : undefined;
     const architecture = this.detectArchitecture(filePath);
     return {
       sha256,
@@ -40,59 +45,12 @@ export class Fingerprint {
       if (!manifestEntry) {
         return { packageName: "unknown" };
       }
-      const data = manifestEntry.getData();
-      const packageName =
-        this.extractAttributeFromBinaryXml(data, "package") || "unknown";
-      const versionName =
-        this.extractAttributeFromBinaryXml(data, "versionName") || undefined;
-      const versionCodeStr = this.extractAttributeFromBinaryXml(
-        data,
-        "versionCode",
-      );
-      const versionCode = versionCodeStr
-        ? parseInt(versionCodeStr, 10)
-        : undefined;
-      return { packageName, versionName, versionCode };
+      validateEntries(zip.getEntries(), dirname(filePath));
+      if (manifestEntry.header.size > 8 * 1024 ** 2) throw new Error("Manifest exceeds limit");
+      const info = extractManifestInfo(manifestEntry.getData());
+      return { packageName: info.packageName ?? "unknown", versionName: info.versionName ?? undefined, versionCode: info.versionCode ?? undefined };
     } catch {
       return { packageName: "unknown" };
-    }
-  }
-  private extractAttributeFromBinaryXml(
-    data: Buffer,
-    attributeName: string,
-  ): string | null {
-    const searchStr = attributeName;
-    const dataStr = data.toString("utf-8", 0, Math.min(data.length, 8192));
-    const patterns = [
-      new RegExp(`${searchStr}[\\x00-\\x1f]*([\\x20-\\x7e]{1,128})`, "i"),
-      new RegExp(`${searchStr}="([^"]+)"`, "i"),
-    ];
-    for (const pattern of patterns) {
-      const match = dataStr.match(pattern);
-      if (match?.[1]) {
-        const value = match[1].replace(/[\x00-\x1f]/g, "").trim();
-        if (value.length > 0 && value.length < 256) return value;
-      }
-    }
-    return null;
-  }
-  private extractCertificate(filePath: string): string | undefined {
-    try {
-      const zip = new AdmZip(filePath);
-      const entries = zip.getEntries();
-      const certEntry = entries.find(
-        (e) =>
-          e.entryName.startsWith("META-INF/") &&
-          (e.entryName.endsWith(".RSA") ||
-            e.entryName.endsWith(".DSA") ||
-            e.entryName.endsWith(".EC")),
-      );
-      if (!certEntry) return undefined;
-      const certData = certEntry.getData();
-      const hash = createHash("sha256").update(certData).digest("hex");
-      return hash;
-    } catch {
-      return undefined;
     }
   }
   private detectArchitecture(filePath: string): string | undefined {

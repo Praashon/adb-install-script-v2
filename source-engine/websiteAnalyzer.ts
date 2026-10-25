@@ -1,3 +1,4 @@
+import { safeFetch, limitedText } from "@security-engine/network";
 import * as cheerio from "cheerio";
 import {
   AnalysisResult,
@@ -20,7 +21,7 @@ const DOWNLOAD_KEYWORDS = [
 const APK_EXTENSIONS = [".apk", ".xapk", ".apks", ".zip"];
 export class WebsiteAnalyzer {
   async analyze(url: string): Promise<AnalysisResult> {
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -32,7 +33,7 @@ export class WebsiteAnalyzer {
     if (!response.ok) {
       throw new Error(`Failed to fetch page: HTTP ${response.status}`);
     }
-    const html = await response.text();
+    const html = await limitedText(response);
     return this.analyzeHtml(html, url);
   }
   analyzeHtml(html: string, baseUrl: string): AnalysisResult {

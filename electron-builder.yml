@@ -36,8 +36,4 @@ extraResources:
     to: scrcpy
     filter:
       - "**/*"
-  - from: storage
-    to: storage
-    filter:
-      - ".gitkeep"
 publish: null

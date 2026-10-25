@@ -1,7 +1,11 @@
+import { safeFetch, limitedText } from "@security-engine/network";
+import { approveDeviceAction } from "./deviceApproval";
 import { ipcMain, BrowserWindow, shell, dialog, app } from "electron";
 import { readFileSync, mkdirSync, statSync } from "fs";
 import { unlink } from "fs/promises";
 import { basename, join } from "path";
+import { is } from "@electron-toolkit/utils";
+import { isTrustedRendererUrl, externalHttpUrl } from "./rendererTrust";
 import { AppContext } from "./appContext";
 import { AdapterRules } from "@security-engine/adapterValidator";
 import { SourceDetector } from "@source-engine/sourceDetector";
@@ -20,7 +24,8 @@ function handle<T extends unknown[], R>(
   fn: (...args: T) => Promise<R> | R,
 ): void {
   ipcMain.removeHandler(channel);
-  ipcMain.handle(channel, async (_event, ...args) => {
+  ipcMain.handle(channel, async (event, ...args) => {
+    assertTrustedSender(event);
     try {
       return await fn(...(args as T));
     } catch (error) {
@@ -28,6 +33,14 @@ function handle<T extends unknown[], R>(
       throw new Error(message);
     }
   });
+}
+function assertTrustedSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): void {
+  const frame = event.senderFrame;
+  if (!BrowserWindow.fromWebContents(event.sender) || !frame || frame !== event.sender.mainFrame ||
+      !isTrustedRendererUrl(frame.url, join(__dirname, "../renderer/index.html"),
+        is.dev ? process.env.ELECTRON_RENDERER_URL : undefined)) {
+    throw new Error("Untrusted IPC sender");
+  }
 }
 function focusedWindow(): BrowserWindow | null {
   return (
@@ -69,6 +82,7 @@ function queueLocalInstall(
     ? ctx.deviceRepo.findBySerial(deviceSerial)
     : ctx.deviceRepo.findPreferred();
 
+  if (deviceSerial && !device) throw new Error("Selected device is not known; refresh devices and retry");
   const jobId = ctx.jobRepo.create({
     url,
     type: "install",
@@ -100,15 +114,18 @@ function registerWindowHandlers(): void {
   ipcMain.removeAllListeners("window:maximize");
   ipcMain.removeAllListeners("window:close");
   ipcMain.on("window:minimize", (event) => {
+    assertTrustedSender(event);
     BrowserWindow.fromWebContents(event.sender)?.minimize();
   });
   ipcMain.on("window:maximize", (event) => {
+    assertTrustedSender(event);
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   });
   ipcMain.on("window:close", (event) => {
+    assertTrustedSender(event);
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
   handle("window:isMaximized", () => focusedWindow()?.isMaximized() ?? false);
@@ -297,7 +314,7 @@ function registerSourceHandlers(ctx: AppContext): void {
     const adapter = ctx.adapterManager.getAdapterBySourceId(id);
     const url = testUrl?.trim() || source.url;
     try {
-      const response = await fetch(url, {
+      const response = await safeFetch(url, {
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -314,7 +331,7 @@ function registerSourceHandlers(ctx: AppContext): void {
           durationMs: Date.now() - started,
         };
       }
-      const html = await response.text();
+      const html = await limitedText(response);
       const parser = new Parser();
       const parsed = await parser.parseDownloadPage(
         html,
@@ -439,29 +456,9 @@ function registerDeviceHandlers(ctx: AppContext): void {
   );
   handle("device:uninstall", async (serial: string, packageName: string) => {
     const adb = ctx.createAdbManager();
-    const full = await adb.uninstall(packageName, serial);
-    let result = full;
-    if (!full.success) {
-      ctx.eventBus.adb(
-        "info",
-        `Direct uninstall of ${packageName} was refused, removing it for the current user instead`,
-        { serial, reason: full.error },
-      );
-      const perUser = await adb.uninstallForUser(packageName, serial);
-      if (!perUser.success) {
-        ctx.eventBus.adb("warn", `Could not uninstall ${packageName}`, {
-          serial,
-          reason: perUser.error,
-        });
-        return {
-          success: false,
-          canDisable: true,
-          error:
-            perUser.error || full.error || `Failed to uninstall ${packageName}`,
-        };
-      }
-      result = perUser;
-    }
+    await approveDeviceAction(serial, packageName, "uninstall", (options) => dialog.showMessageBox(options));
+    const result = await adb.uninstall(packageName, serial);
+    if (!result.success) return { success: false, canDisable: true, error: result.error };
     const device = ctx.deviceRepo.findBySerial(serial);
     if (device) ctx.installedAppRepo.removeByPackage(packageName, device.id);
     ctx.eventBus.adb("info", `Uninstalled ${packageName}`, {
@@ -472,6 +469,7 @@ function registerDeviceHandlers(ctx: AppContext): void {
   });
   handle("device:disableApp", async (serial: string, packageName: string) => {
     const adb = ctx.createAdbManager();
+    await approveDeviceAction(serial, packageName, "disable", (options) => dialog.showMessageBox(options));
     const result = await adb.disableForUser(packageName, serial);
     if (!result.success) {
       throw new Error(result.error || `Could not disable ${packageName}`);
@@ -498,10 +496,8 @@ function registerDeviceHandlers(ctx: AppContext): void {
     async (serial: string, packageName: string) => {
       const adb = ctx.createAdbManager();
 
-      let result = await adb.uninstallForUser(packageName, serial);
-      if (!result.success) {
-        result = await adb.disableForUser(packageName, serial);
-      }
+      await approveDeviceAction(serial, packageName, "remove-user", (options) => dialog.showMessageBox(options));
+      const result = await adb.uninstallForUser(packageName, serial);
 
       if (!result.success) {
         throw new Error(
@@ -738,6 +734,12 @@ function registerDeviceHandlers(ctx: AppContext): void {
   handle("wireless:stabilize", async (serial: string, label?: string) => {
     const adb = ctx.createAdbManager();
 
+    const approval = await dialog.showMessageBox({
+      type: "warning", title: "Enable legacy wireless ADB?", message: `Device: ${serial}`,
+      detail: "This restarts ADB in TCP mode on port 5555. Devices on your network may reach the debugging service. Prefer Android 11+ pairing on trusted networks.",
+      buttons: ["Cancel", "Enable TCP mode"], defaultId: 0, cancelId: 0, noLink: true,
+    });
+    if (approval.response !== 1) throw new Error("Wireless change cancelled");
     const tcp = await adb.tcpip(serial, 5555);
     if (!tcp.success) {
       throw new Error(
@@ -757,7 +759,6 @@ function registerDeviceHandlers(ctx: AppContext): void {
       );
     }
 
-    await adb.persistWirelessSettings(serial).catch(() => undefined);
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
     const connect = await adb.connect(address);
@@ -772,14 +773,8 @@ function registerDeviceHandlers(ctx: AppContext): void {
     return { address, connected: connect.success, id };
   });
 
-  handle("wireless:keepAwake", async (serial: string) => {
-    const adb = ctx.createAdbManager();
-    const result = await adb.persistWirelessSettings(serial);
-    ctx.eventBus.adb("info", "Applied wireless keep-awake settings", {
-      serial,
-      ...result,
-    });
-    return result;
+  handle("wireless:keepAwake", async () => {
+    throw new Error("Enable Wireless debugging in Android Settings. The app does not change developer settings automatically.");
   });
   handle("device:adbStatus", async () => {
     const adb = ctx.createAdbManager();
@@ -816,6 +811,13 @@ function registerDownloadHandlers(ctx: AppContext): void {
     if (error) throw new Error(error);
   });
 
+  handle("download:analyzeFile", async () => {
+    const picked = await openDialog({ title: "Analyze an APK offline", properties: ["openFile"],
+      filters: [{ name: "Android packages", extensions: ["apk", "apks", "xapk", "apkm"] }] });
+    if (picked.canceled || !picked.filePaths[0]) return null;
+    const { analyzeApkFile } = await import("@apk-engine/apkAnalyzer");
+    return analyzeApkFile(picked.filePaths[0]);
+  });
   handle("download:analyze", async (id: string) => {
     const download = ctx.downloadRepo.findById(id);
     if (!download?.filePath) {
@@ -945,7 +947,7 @@ function registerAppHandlers(ctx: AppContext): void {
   handle("app:openExternal", async (url: string) => {
     if (!/^https?:\/\//i.test(url))
       throw new Error("Only http(s) links can be opened");
-    await shell.openExternal(url);
+    await shell.openExternal(externalHttpUrl(url));
   });
   handle("app:getInfo", async () => {
     const adb = ctx.createAdbManager();

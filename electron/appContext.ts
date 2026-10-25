@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app, dialog } from "electron";
 import { join } from "path";
 import { mkdirSync } from "fs";
 import { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
@@ -55,7 +55,7 @@ export interface AppContext {
     work: string;
     scrcpy: string;
   };
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 export async function createAppContext(
   db: BetterSQLite3Database<typeof schema>,
@@ -133,6 +133,22 @@ export async function createAppContext(
     failureTracker,
     getSettings,
     workDir: paths.work,
+    approveInstall: async ({ serial, analysis, warnings, files, allowDowngrade, grantPermissions, signal }) => {
+      const result = await dialog.showMessageBox({ signal, type: "warning", title: "Installation preview",
+        message: `Install ${analysis.packageName ?? analysis.fileName} on ${serial}?`,
+        detail: [
+          `Device: ${serial}`, `Package: ${analysis.packageName ?? "Unknown"}`,
+          `Version: ${analysis.versionName ?? "Unknown"} (${analysis.versionCode ?? "?"})`,
+          `Files: ${files}`, `SHA-256 (base APK): ${analysis.sha256}`,
+          `Sensitive permissions: ${analysis.dangerousCount}`, `Signing: ${analysis.signature.status}`,
+          `Allow downgrade: ${allowDowngrade}. Grant runtime permissions: ${grantPermissions}.`,
+          ...warnings, ...analysis.warnings,
+          "Installed certificate comparison is not performed in this preview. Android enforces signing compatibility.",
+          "Installing replaces the existing app when Android allows it. Back up important data first.",
+        ].join("\n"), buttons: ["Cancel", "Install on this device"], defaultId: 0, cancelId: 0, noLink: true,
+      });
+      return result.response === 1;
+    },
   });
   const maxConcurrent = parseInt(
     settingsRepo.get("download.maxConcurrent") ?? "2",
@@ -205,7 +221,8 @@ export async function createAppContext(
     getSettings,
     createAdbManager,
     paths,
-    dispose(): void {
+    async dispose(): Promise<void> {
+      await jobRunner.shutdown();
       unsubscribeLogs();
       deviceMonitor.stop();
       cancelAllRecordings();

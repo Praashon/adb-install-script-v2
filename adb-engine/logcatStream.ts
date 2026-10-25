@@ -1,3 +1,4 @@
+import { assertSerial } from "./arguments";
 import { spawn, ChildProcess } from "child_process";
 
 export type LogLevel = "V" | "D" | "I" | "W" | "E" | "F";
@@ -39,6 +40,7 @@ export class LogcatManager {
   }
 
   start(serial: string): void {
+  assertSerial(serial);
     if (this.sessions.has(serial)) return;
 
     const child = spawn(
@@ -79,6 +81,7 @@ export class LogcatManager {
   }
 
   async clear(serial: string): Promise<void> {
+  assertSerial(serial);
     await new Promise<void>((resolve) => {
       const child = spawn(this.getAdbPath(), ["-s", serial, "logcat", "-c"], {
         windowsHide: true,
@@ -94,7 +97,7 @@ export class LogcatManager {
 
     const combined = session.carry + text;
     const lines = combined.split("\n");
-    session.carry = lines.pop() ?? "";
+    session.carry = (lines.pop() ?? "").slice(-65536);
 
     for (const raw of lines) {
       const line = raw.replace(/\r$/, "");

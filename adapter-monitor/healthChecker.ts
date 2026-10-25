@@ -1,3 +1,4 @@
+import { safeFetch } from "@security-engine/network";
 import { AdapterRepository } from "@core/database/repositories/adapterRepository";
 import { SourceRepository } from "@core/database/repositories/sourceRepository";
 import { EventBus } from "@core/event-bus/eventBus";
@@ -68,7 +69,7 @@ export class HealthChecker {
     }
     let status: HealthStatus["status"] = "healthy";
     try {
-      const response = await fetch(`https://${source.domain}`, {
+      const response = await safeFetch(`https://${source.domain}`, {
         method: "HEAD",
         signal: AbortSignal.timeout(10000),
       });

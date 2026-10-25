@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 interface ModalProps {
@@ -24,14 +24,31 @@ export function Modal({
   footer,
   size = "md",
 }: ModalProps) {
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     if (!open) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const focusable = () => [...(panel.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]',
+    ) ?? [])].filter((element) => element.offsetParent !== null);
+    (focusable()[0] ?? panel.current)?.focus();
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") { event.preventDefault(); close.current(); }
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      const first = elements[0]; const last = elements[elements.length - 1];
+      if (!first) { event.preventDefault(); panel.current?.focus(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !panel.current?.contains(document.activeElement))) {
+        event.preventDefault(); first.focus();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+    return () => { window.removeEventListener("keydown", onKeyDown); if (previousFocus?.isConnected) previousFocus.focus(); };
+  }, [open]);
   if (!open) return null;
   return (
     <div
@@ -40,6 +57,8 @@ export function Modal({
       role="presentation"
     >
       <div
+        ref={panel}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}

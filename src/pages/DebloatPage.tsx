@@ -157,7 +157,7 @@ export function DebloatPage() {
     if (failures.length === 0) {
       notify.success(
         "Debloat complete",
-        `Removed ${removed} app${removed === 1 ? "" : "s"} for the current user.`,
+        `Removed ${removed} app${removed === 1 ? "" : "s"} for Android user 0.`,
       );
     } else {
       notify.warning(
@@ -305,8 +305,8 @@ export function DebloatPage() {
         title={`Remove ${selected.size} app${selected.size === 1 ? "" : "s"}?`}
         message={
           selectedHasRisk
-            ? "Some selected apps are marked Caution or Expert. They are removed for the current user only and can be restored by a factory reset, but device features may change."
-            : "These apps are removed for the current user only. They stay on the system partition and can be restored by a factory reset."
+            ? "Some selected apps are marked Caution or Expert. Removal targets Android user 0. App data or device features may be lost; restoration is not guaranteed."
+            : "These packages will be removed for Android user 0. App data may be lost; restoration is not guaranteed."
         }
         confirmLabel="Remove"
         danger
@@ -330,7 +330,7 @@ function PageHeader() {
       <p className="text-ink-2 mt-3 max-w-xl leading-relaxed">
         Scan the device against a curated catalog of known manufacturer and
         carrier apps, then remove what you do not want. Everything is removed
-        for the current user only, so a factory reset brings it all back.
+        for Android user 0. Back up important data; restoration is not guaranteed.
       </p>
     </header>
   );

@@ -1,3 +1,4 @@
+import { safeFetch, limitedText } from "@security-engine/network";
 import { Parser } from "@source-engine/parser";
 import { SandboxedAdapter } from "@security-engine/sandbox";
 import { ResolvedDownload } from "../resolver";
@@ -23,7 +24,7 @@ export class HTMLDownloadStrategy {
     url: string,
     adapter: SandboxedAdapter,
   ): Promise<ResolvedDownload | null> {
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -33,7 +34,7 @@ export class HTMLDownloadStrategy {
     if (!response.ok) {
       throw new Error(`Failed to fetch page: HTTP ${response.status}`);
     }
-    const html = await response.text();
+    const html = await limitedText(response);
     const result = await this.parser.parseDownloadPage(html, url, adapter);
     if (!result) {
       this.eventBus.download("warn", "HTML strategy found no download link", {
@@ -62,7 +63,7 @@ export class RedirectDownloadStrategy {
     let currentUrl = url;
     let redirectCount = 0;
     while (redirectCount < maxRedirects) {
-      const response = await fetch(currentUrl, {
+      const response = await safeFetch(currentUrl, {
         method: "HEAD",
         redirect: "manual",
         headers: {

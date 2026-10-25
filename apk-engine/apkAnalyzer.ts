@@ -1,3 +1,8 @@
+import { createReadStream, statSync } from "fs";
+import { createHash } from "crypto";
+import { dirname } from "path";
+import { validateEntries } from "../scripts/safe-archive.cjs";
+import { inspectSignature, type SignatureInfo } from "./signature";
 import AdmZip from "adm-zip";
 import { basename } from "path";
 import { extractManifestInfo } from "./manifest/axml";
@@ -16,6 +21,12 @@ export interface ApkAnalysis {
   targetSdk: number | null;
   permissions: PermissionInsight[];
   dangerousCount: number;
+  sha256: string;
+  fileSize: number;
+  architectures: string[];
+  metadataComplete: boolean;
+  signature: SignatureInfo;
+  warnings: string[];
 }
 
 const DANGEROUS = new Set([
@@ -57,8 +68,15 @@ const DANGEROUS = new Set([
   "android.permission.WRITE_SETTINGS",
 ]);
 
-export function analyzeApkFile(filePath: string): ApkAnalysis {
-  const manifest = readManifestBytes(filePath);
+export async function analyzeApkFile(filePath: string): Promise<ApkAnalysis> {
+  const fileSize = statSync(filePath).size;
+  if (fileSize > 512 * 1024 ** 2) throw new Error("Offline analysis is limited to 512 MiB per package");
+  const zip = new AdmZip(filePath);
+  validateEntries(zip.getEntries(), dirname(filePath), { maxEntryBytes: 512 * 1024 ** 2 });
+  const inner = zip.getEntry("AndroidManifest.xml") ? zip : readBaseApk(zip, filePath);
+  const manifestEntry = inner?.getEntry("AndroidManifest.xml");
+  if (manifestEntry && manifestEntry.header.size > 8 * 1024 ** 2) throw new Error("Android manifest exceeds analysis limit");
+  const manifest = manifestEntry?.getData();
   const info = manifest
     ? extractManifestInfo(manifest)
     : {
@@ -80,6 +98,16 @@ export function analyzeApkFile(filePath: string): ApkAnalysis {
 
   return {
     fileName: basename(filePath),
+    fileSize,
+    sha256: await hashFile(filePath),
+    architectures: [...new Set((inner?.getEntries() ?? []).map((entry) => entry.entryName.match(/^lib\/([^/]+)\/[^/]+\.so$/)?.[1]).filter((abi): abi is string => Boolean(abi)))].sort(),
+    metadataComplete: Boolean(info.packageName),
+    signature: inner === zip ? await inspectSignature(filePath) : { status: "unavailable", certificateSha256: [], detail: "Bundle signing must be checked on every extracted APK; this view analyzes base metadata only." },
+    warnings: [
+      "Permission analysis does not establish that an APK is malware-free.",
+      ...(!info.packageName ? ["Manifest metadata could not be read. Permission results may be incomplete."] : []),
+      ...(inner !== zip ? ["Bundle metadata describes the base APK; split compatibility requires installation validation."] : []),
+    ],
     packageName: info.packageName,
     versionName: info.versionName,
     versionCode: info.versionCode,
@@ -90,21 +118,17 @@ export function analyzeApkFile(filePath: string): ApkAnalysis {
   };
 }
 
-function readManifestBytes(filePath: string): Buffer | null {
-  const zip = new AdmZip(filePath);
-
-  const direct = zip.getEntry("AndroidManifest.xml");
-  if (direct) return direct.getData();
-
-  const innerApk =
-    zip.getEntries().find((e) => /(^|\/)base\.apk$/i.test(e.entryName)) ??
-    zip.getEntries().find((e) => e.entryName.toLowerCase().endsWith(".apk"));
-
-  if (innerApk) {
-    const inner = new AdmZip(innerApk.getData());
-    const manifest = inner.getEntry("AndroidManifest.xml");
-    if (manifest) return manifest.getData();
-  }
-
-  return null;
+function readBaseApk(zip: AdmZip, filePath: string): AdmZip | null {
+  const entry = zip.getEntries().find((item) => /(^|\/)base\.apk$/i.test(item.entryName)) ??
+    zip.getEntries().find((item) => item.entryName.toLowerCase().endsWith(".apk"));
+  if (!entry) return null;
+  if (entry.header.size > 512 * 1024 ** 2) throw new Error("Nested APK exceeds analysis limit");
+  const inner = new AdmZip(entry.getData());
+  validateEntries(inner.getEntries(), dirname(filePath));
+  return inner;
+}
+async function hashFile(filePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+  return hash.digest("hex");
 }

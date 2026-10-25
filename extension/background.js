@@ -41,8 +41,8 @@ function sendToDesktopApp(url) {
         chrome.notifications.create({
           type: "basic",
           iconUrl: "icons/icon48.png",
-          title: "Job Sent",
-          message: "Download sent to ADB APK Installer Pro successfully.",
+          title: response?.success ? "Download queued" : "Request not queued",
+          message: response?.success ? "Download queued for review in ADB APK Installer Pro." : response?.error || "Request cancelled in the desktop app.",
         });
       }
     },

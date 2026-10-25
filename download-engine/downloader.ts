@@ -1,5 +1,7 @@
+import { randomUUID } from "crypto";
+import { safeFetch } from "@security-engine/network";
 import { createWriteStream } from "fs";
-import { mkdir, unlink } from "fs/promises";
+import { mkdir, unlink, link } from "fs/promises";
 import { dirname } from "path";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
@@ -10,6 +12,7 @@ export interface DownloadOptions {
   headers?: Record<string, string>;
   jobId?: string;
   signal?: AbortSignal;
+  maxBytes?: number;
   onProgress?: (
     downloaded: number,
     total: number | null,
@@ -29,14 +32,17 @@ export class Downloader {
   async download(options: DownloadOptions): Promise<DownloadResult> {
     const { url, outputPath, headers = {}, jobId, signal } = options;
     await mkdir(dirname(outputPath), { recursive: true });
+    const maxBytes = options.maxBytes ?? 2 * 1024 ** 3;
+    const temporaryPath = `${outputPath}.${randomUUID()}.part`;
     const startTime = Date.now();
     this.eventBus.download("info", `Starting download: ${url}`, { jobId });
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       headers: { "User-Agent": DEFAULT_USER_AGENT, ...headers },
       redirect: "follow",
       signal,
     });
     if (!response.ok) {
+      await response.body?.cancel();
       throw new Error(
         `Download failed: HTTP ${response.status} ${response.statusText}`,
       );
@@ -45,7 +51,11 @@ export class Downloader {
       throw new Error("Server returned an empty response body");
     }
     const contentLength = response.headers.get("content-length");
-    const totalSize = contentLength ? parseInt(contentLength, 10) : null;
+    const totalSize = contentLength && /^\d+$/.test(contentLength) ? Number(contentLength) : null;
+    if (totalSize !== null && (!Number.isSafeInteger(totalSize) || totalSize > maxBytes)) {
+      await response.body.cancel();
+      throw new Error("Download exceeds size limit");
+    }
     const mimeType = response.headers.get("content-type") || undefined;
     let downloaded = 0;
     let lastTick = startTime;
@@ -55,6 +65,7 @@ export class Downloader {
     );
     source.on("data", (chunk: Buffer) => {
       downloaded += chunk.length;
+      if (downloaded > maxBytes) { source.destroy(new Error("Download exceeds size limit")); return; }
       const now = Date.now();
       const elapsed = now - lastTick;
       if (elapsed < 400) return;
@@ -71,17 +82,15 @@ export class Downloader {
       });
     });
     try {
-      await pipeline(source, createWriteStream(outputPath), { signal });
+      await pipeline(source, createWriteStream(temporaryPath, { flags: "wx" }), { signal });
+      if (totalSize !== null && downloaded < totalSize) throw new Error(`Download incomplete: received ${downloaded} of ${totalSize} bytes`);
+      // Hard-link publication is atomic and refuses to overwrite an existing download.
+      await link(temporaryPath, outputPath);
+      await unlink(temporaryPath);
     } catch (error) {
-      await unlink(outputPath).catch(() => {});
+      await unlink(temporaryPath).catch(() => {});
       if (signal?.aborted) throw new Error("Download aborted");
       throw error;
-    }
-    if (totalSize !== null && downloaded < totalSize) {
-      await unlink(outputPath).catch(() => {});
-      throw new Error(
-        `Download incomplete: received ${downloaded} of ${totalSize} bytes`,
-      );
     }
     const duration = Date.now() - startTime;
     options.onProgress?.(downloaded, totalSize, 0);

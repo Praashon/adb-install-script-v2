@@ -72,7 +72,7 @@ export function HomePage() {
           "Install queued",
           preferredDevice
             ? `Target: ${preferredDevice.model || preferredDevice.serial}`
-            : "The first available device will be used",
+            : "Choose a device before installing when multiple devices are online",
         );
       } else {
         await jobService.createDownload(trimmed);

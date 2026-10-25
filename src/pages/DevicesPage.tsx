@@ -1075,7 +1075,7 @@ function InstalledAppsModal({
       <ConfirmDialog
         open={Boolean(pendingUninstall)}
         title="Uninstall app?"
-        message={`${pendingUninstall} will be removed from the device along with its data. Preinstalled system apps cannot be deleted outright, so those are removed for the current user instead.`}
+        message={`${pendingUninstall} will be removed from the device along with its data. If Android refuses, no other removal operation is attempted. Restoration is not guaranteed.`}
         confirmLabel="Uninstall"
         danger
         busy={isUninstalling}
@@ -1086,7 +1086,7 @@ function InstalledAppsModal({
       <ConfirmDialog
         open={Boolean(blockedPackage)}
         title="Disable it instead?"
-        message={`${blockedPackage?.reason} \n\nThe app can still be disabled: it stops running and leaves the launcher, but the APK stays on the system partition. This is reversible.`}
+        message={`${blockedPackage?.reason} \n\nThe app can still be disabled: it stops running and leaves the launcher, but the APK stays on the system partition. Re-enabling depends on Android allowing the change.`}
         confirmLabel="Disable app"
         danger
         busy={isUninstalling}
