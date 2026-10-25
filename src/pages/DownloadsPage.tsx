@@ -28,6 +28,9 @@ export function DownloadsPage() {
   const jobs = useAppStore((s) => s.jobs);
   const setJobs = useAppStore((s) => s.setJobs);
   const preferredDevice = useAppStore((s) => s.preferredDevice)();
+  const [localAnalysis, setLocalAnalysis] = useState<ApkAnalysis | null>(null);
+  const [analyzingFile, setAnalyzingFile] = useState(false);
+  const closeAnalysis = useCallback(() => { setAnalyzeTarget(null); setLocalAnalysis(null); }, []);
   const [downloads, setDownloads] = useState<Download[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [logJob, setLogJob] = useState<Job | null>(null);
@@ -139,7 +142,7 @@ export function DownloadsPage() {
   };
   return (
     <div className="max-w-5xl mx-auto py-6">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-wrap gap-4 items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-ink mb-1">
             Downloads &amp; Jobs
@@ -148,6 +151,13 @@ export function DownloadsPage() {
             Monitor active downloads and installation progress
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button className="btn-secondary" disabled={analyzingFile} onClick={() => {
+            setAnalyzingFile(true);
+            void downloadService.analyzeFile().then(setLocalAnalysis)
+              .catch((error: unknown) => notify.error("Analysis failed", error instanceof Error ? error.message : undefined))
+              .finally(() => setAnalyzingFile(false));
+          }}><ShieldQuestion className="w-4 h-4" />{analyzingFile ? "Analyzing..." : "Analyze local APK"}</button>
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
           <input
@@ -157,7 +167,9 @@ export function DownloadsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             spellCheck={false}
+            aria-label="Search downloads"
           />
+        </div>
         </div>
       </div>
 
@@ -384,7 +396,8 @@ export function DownloadsPage() {
 
       <AnalysisModal
         download={analyzeTarget}
-        onClose={() => setAnalyzeTarget(null)}
+        localAnalysis={localAnalysis}
+        onClose={closeAnalysis}
       />
     </div>
   );
@@ -665,10 +678,12 @@ function labelForPermission(permission: string): string {
 }
 
 function AnalysisModal({
+  localAnalysis,
   download,
   onClose,
 }: {
   download: Download | null;
+  localAnalysis?: ApkAnalysis | null;
   onClose: () => void;
 }) {
   const [analysis, setAnalysis] = useState<ApkAnalysis | null>(null);
@@ -676,7 +691,7 @@ function AnalysisModal({
 
   useEffect(() => {
     if (!download) {
-      setAnalysis(null);
+      setAnalysis(localAnalysis ?? null);
       return;
     }
     let cancelled = false;
@@ -701,16 +716,16 @@ function AnalysisModal({
     return () => {
       cancelled = true;
     };
-  }, [download, onClose]);
+  }, [download, localAnalysis, onClose]);
 
   const dangerous = analysis?.permissions.filter((p) => p.dangerous) ?? [];
   const normal = analysis?.permissions.filter((p) => !p.dangerous) ?? [];
 
   return (
     <Modal
-      open={Boolean(download)}
-      title="Permission analysis"
-      description={download?.filename}
+      open={Boolean(download || localAnalysis)}
+      title="APK Security Center"
+      description={download?.filename ?? localAnalysis?.fileName}
       onClose={onClose}
     >
       {isLoading ? (
@@ -719,15 +734,25 @@ function AnalysisModal({
         </p>
       ) : !analysis ? null : (
         <div className="space-y-5">
+          <dl className="space-y-3 text-sm">
+            <div><dt className="text-ink-2">SHA-256</dt><dd className="font-mono break-all selectable mt-1">{analysis.sha256}</dd></div>
+            <div><dt className="text-ink-2">Android compatibility</dt><dd>Min SDK {analysis.minSdk ?? "unknown"} / Target SDK {analysis.targetSdk ?? "unknown"}</dd></div>
+            <div><dt className="text-ink-2">Native architectures</dt><dd>{analysis.architectures.join(", ") || "No native libraries detected in analyzed APK"}</dd></div>
+            <div><dt className="text-ink-2">Signing verification: {analysis.signature.status}</dt><dd>{analysis.signature.detail}</dd>
+              {analysis.signature.certificateSha256.map((digest) => <dd className="font-mono break-all selectable mt-2" key={digest}>{digest}</dd>)}</div>
+          </dl>
+          <ul className="text-sm text-ink-2 space-y-2" aria-label="Analysis limitations">
+            {analysis.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          </ul>
           <div className="grid grid-cols-2 gap-2.5">
             <div className="inset-panel px-3.5 py-3">
-              <span className="eyebrow block mb-1">Package</span>
+              <span className="text-sm text-ink-2 block mb-1">Package</span>
               <span className="text-sm font-mono text-ink break-all selectable">
                 {analysis.packageName ?? "Unknown"}
               </span>
             </div>
             <div className="inset-panel px-3.5 py-3">
-              <span className="eyebrow block mb-1">Version</span>
+              <span className="text-sm text-ink-2 block mb-1">Version</span>
               <span className="text-sm text-ink">
                 {analysis.versionName ?? "?"}
                 {analysis.targetSdk ? ` · SDK ${analysis.targetSdk}` : ""}
@@ -738,12 +763,12 @@ function AnalysisModal({
           <div
             className={cn(
               "panel p-3.5 flex items-center gap-3",
-              dangerous.length > 0
+              dangerous.length > 0 || !analysis.metadataComplete
                 ? "border-caution/30 bg-caution/[0.05]"
                 : "border-verify/30 bg-verify/[0.05]",
             )}
           >
-            {dangerous.length > 0 ? (
+            {dangerous.length > 0 || !analysis.metadataComplete ? (
               <ShieldAlert className="w-5 h-5 text-caution shrink-0" />
             ) : (
               <ShieldCheck className="w-5 h-5 text-verify shrink-0" />
@@ -751,13 +776,13 @@ function AnalysisModal({
             <p className="text-sm text-ink-2">
               {dangerous.length > 0
                 ? `${dangerous.length} sensitive permission${dangerous.length === 1 ? "" : "s"} out of ${analysis.permissions.length} requested.`
-                : `No sensitive permissions among ${analysis.permissions.length} requested.`}
+                : analysis.metadataComplete ? `No classified sensitive permissions among ${analysis.permissions.length} requested.` : "Permission information is unavailable or incomplete."}
             </p>
           </div>
 
           {dangerous.length > 0 && (
             <section>
-              <h3 className="eyebrow mb-2 text-caution">Sensitive</h3>
+              <h3 className="text-sm font-medium mb-2 text-caution">Sensitive</h3>
               <ul className="panel divide-y divide-line overflow-hidden">
                 {dangerous.map((perm) => (
                   <li
@@ -781,7 +806,7 @@ function AnalysisModal({
 
           {normal.length > 0 && (
             <section>
-              <h3 className="eyebrow mb-2">Other permissions</h3>
+              <h3 className="text-sm font-medium mb-2">Other permissions</h3>
               <ul className="panel divide-y divide-line overflow-hidden">
                 {normal.map((perm) => (
                   <li
@@ -800,7 +825,7 @@ function AnalysisModal({
             </section>
           )}
 
-          {analysis.permissions.length === 0 && (
+          {analysis.metadataComplete && analysis.permissions.length === 0 && (
             <p className="text-sm text-ink-3 py-6 text-center">
               This package requests no permissions.
             </p>

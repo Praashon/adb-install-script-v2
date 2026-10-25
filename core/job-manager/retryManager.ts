@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "timers/promises";
 export interface RetryPolicy {
   maxRetries: number;
   baseDelayMs: number;
@@ -32,9 +33,8 @@ export class RetryManager {
       Math.pow(this.policy.backoffMultiplier, attempt);
     return Math.min(delay, this.policy.maxDelayMs);
   }
-  async waitForRetry(key: string): Promise<void> {
-    const delay = this.getDelay(key);
-    await new Promise((resolve) => setTimeout(resolve, delay));
+  async waitForRetry(key: string, signal?: AbortSignal): Promise<void> {
+    await delay(this.getDelay(key), undefined, { signal }).catch((error) => { if (!signal?.aborted) throw error; });
   }
   reset(key: string): void {
     this.attempts.delete(key);

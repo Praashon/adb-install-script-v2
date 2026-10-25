@@ -1,3 +1,6 @@
+import { analyzeApkFile, type ApkAnalysis } from "@apk-engine/apkAnalyzer";
+import { installationWarnings } from "@apk-engine/compatibility";
+import { safeFetch, limitedText } from "@security-engine/network";
 import { join, extname, basename } from "path";
 import { existsSync, mkdirSync } from "fs";
 import { rm, open } from "fs/promises";
@@ -47,6 +50,7 @@ export interface JobStepDeps {
   failureTracker: FailureTracker;
   getSettings(): JobSettings;
   workDir: string;
+  approveInstall(preview: { serial: string; analysis: ApkAnalysis; warnings: string[]; files: number; allowDowngrade: boolean; grantPermissions: boolean; signal: AbortSignal }): Promise<boolean>;
 }
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -278,7 +282,7 @@ async function probeUrl(
 ): Promise<ProbeResult> {
   let response: Response | null = null;
   try {
-    response = await fetch(url, {
+    response = await safeFetch(url, {
       method: "HEAD",
       redirect: "follow",
       headers,
@@ -291,7 +295,7 @@ async function probeUrl(
     !response || !response.ok || !response.headers.get("content-type");
   if (headWasUseless) {
     try {
-      response = await fetch(url, {
+      response = await safeFetch(url, {
         method: "GET",
         redirect: "follow",
         headers: { ...headers, Range: "bytes=0-0" },
@@ -338,7 +342,7 @@ async function fetchText(
   headers: Record<string, string>,
   signal: AbortSignal,
 ): Promise<string> {
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     headers: {
       ...headers,
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -351,7 +355,7 @@ async function fetchText(
       `Page request failed: HTTP ${response.status} ${response.statusText}`,
     );
   }
-  return response.text();
+  return limitedText(response);
 }
 async function downloadFile(
   ctx: JobContext,
@@ -568,6 +572,21 @@ async function installApk(
   const settings = deps.getSettings();
   const adb = new AdbManager(settings.adbPath);
   const device = await selectDevice(ctx, adb, deps);
+  const analysis = await analyzeApkFile(apkFiles[0]);
+  const deviceInfo = await adb.getDeviceInfo(device.serial);
+  const installed = analysis.packageName ? await new Verifier(adb.getAdbPath()).getInstalledVersion(analysis.packageName, device.serial) : {};
+  const compatibility = installationWarnings(analysis, { sdkVersion: deviceInfo.sdkVersion,
+    supportedAbis: deviceInfo.supportedAbis, installedVersionCode: installed.versionCode });
+  if (compatibility.blocked) throw new NonRetryableError(compatibility.warnings.join(" "));
+  if (analysis.versionCode !== null && installed.versionCode !== undefined && analysis.versionCode < installed.versionCode && !settings.allowDowngrade) {
+    throw new NonRetryableError("Downgrade blocked. Review package versions and explicitly enable downgrade in Settings if intended.");
+  }
+  if (analysis.signature.status === "failed") throw new NonRetryableError("APK signature verification failed. Check apksigner configuration and package integrity.");
+  helpers.throwIfAborted();
+  const approved = await deps.approveInstall({ serial: device.serial, analysis, warnings: compatibility.warnings,
+    files: apkFiles.length, allowDowngrade: settings.allowDowngrade, grantPermissions: settings.grantPermissions, signal: helpers.signal });
+  helpers.throwIfAborted();
+  if (!approved) throw new NonRetryableError("Installation cancelled at preview");
   helpers.log("info", `Installing to ${device.model || device.serial}`);
   helpers.setStepProgress(0.15);
   const installer = new Installer(deps.eventBus, adb.getAdbPath());
@@ -674,6 +693,7 @@ async function selectDevice(
         : "No online device available. Check the USB connection.",
     );
   }
+  if (online.length > 1) throw new NonRetryableError("Multiple devices are online. Select a target device before installing.");
   return { serial: online[0].serial, model: online[0].model };
 }
 async function verifyInstallation(

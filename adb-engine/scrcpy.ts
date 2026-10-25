@@ -1,3 +1,4 @@
+import { assertSerial } from "./arguments";
 import { spawn, ChildProcess } from "child_process";
 import { existsSync } from "fs";
 import { join } from "path";
@@ -41,6 +42,7 @@ export class ScrcpyManager {
   }
 
   start(serial: string): void {
+  assertSerial(serial);
     if (this.processes.has(serial)) return;
 
     const status = this.status();

@@ -1,3 +1,5 @@
+import { validateEntries } from "../scripts/safe-archive.cjs";
+import { dirname } from "path";
 import AdmZip from "adm-zip";
 import { statSync } from "fs";
 export interface ValidationResult {
@@ -28,7 +30,7 @@ export class ApkValidator {
     }
     try {
       const zip = new AdmZip(filePath);
-      const entries = zip.getEntries();
+      const entries = validateEntries(zip.getEntries(), dirname(filePath));
       entryCount = entries.length;
       if (entryCount === 0) {
         errors.push("APK archive is empty");
@@ -70,7 +72,7 @@ export class ApkValidator {
   isValidArchive(filePath: string): boolean {
     try {
       const zip = new AdmZip(filePath);
-      zip.getEntries();
+      validateEntries(zip.getEntries(), dirname(filePath));
       return true;
     } catch {
       return false;

@@ -41,7 +41,7 @@ export class DeviceMonitor {
     return available;
   }
   private async poll(force = false): Promise<void> {
-    if (this.polling && !force) return;
+    if (this.polling) return;
     this.polling = true;
     try {
       const adb = this.createAdbManager();

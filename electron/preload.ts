@@ -83,20 +83,8 @@ export interface WirelessDevice {
   lastConnectedAt: number | null;
   createdAt: number;
 }
-export interface PermissionInsight {
-  name: string;
-  dangerous: boolean;
-}
-export interface ApkAnalysis {
-  fileName: string;
-  packageName: string | null;
-  versionName: string | null;
-  versionCode: number | null;
-  minSdk: number | null;
-  targetSdk: number | null;
-  permissions: PermissionInsight[];
-  dangerousCount: number;
-}
+import type { ApkAnalysis } from "../apk-engine/apkAnalyzer";
+export type { ApkAnalysis, PermissionInsight } from "../apk-engine/apkAnalyzer";
 export interface ElectronAPI {
   window: {
     minimize(): void;
@@ -263,6 +251,7 @@ export interface ElectronAPI {
     install(id: string, deviceSerial?: string): Promise<string>;
     clearHistory(deleteFiles?: boolean): Promise<number>;
     analyze(id: string): Promise<ApkAnalysis>;
+    analyzeFile(): Promise<ApkAnalysis | null>;
   };
   settings: {
     get(key: string): Promise<string | undefined>;
@@ -393,6 +382,7 @@ const api: ElectronAPI = {
     clearHistory: (deleteFiles) =>
       ipcRenderer.invoke("download:clearHistory", deleteFiles),
     analyze: (id) => ipcRenderer.invoke("download:analyze", id),
+    analyzeFile: () => ipcRenderer.invoke("download:analyzeFile"),
   },
   settings: {
     get: (key) => ipcRenderer.invoke("settings:get", key),

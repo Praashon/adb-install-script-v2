@@ -1,3 +1,5 @@
+import { publicHttpUrl, isPublicAddress } from "@security-engine/network";
+import { lookup } from "dns/promises";
 import { chromium, Browser, BrowserContext } from "playwright-core";
 import { existsSync } from "fs";
 import { join } from "path";
@@ -22,10 +24,9 @@ export class BrowserManager {
     }
     browserInstance = await chromium.launch({
       headless: !this.headed,
+      chromiumSandbox: true,
       executablePath: BrowserManager.findChromium(),
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
         "--disable-blink-features=AutomationControlled",
@@ -43,8 +44,18 @@ export class BrowserManager {
       viewport: { width: 1280, height: 720 },
       locale: "en-US",
       acceptDownloads: true,
+      serviceWorkers: "block",
       extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
     });
+    await this.context.route("**/*", async (route) => {
+      try {
+        const url = publicHttpUrl(route.request().url());
+        const addresses = await lookup(url.hostname.replace(/^\[|\]$/g, ""), { all: true });
+        if (!addresses.length || addresses.some(({ address }) => !isPublicAddress(address))) throw new Error("Private browser destination");
+        await route.continue();
+      } catch { await route.abort("blockedbyclient"); }
+    });
+    await this.context.routeWebSocket("**/*", (socket) => socket.close());
     await this.context.addInitScript(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     });

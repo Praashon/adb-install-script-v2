@@ -6,7 +6,7 @@ import {
   mkdirSync,
   rmSync,
 } from "fs";
-import { join } from "path";
+import { join, resolve, relative, isAbsolute } from "path";
 import { SourceRepository } from "@core/database/repositories/sourceRepository";
 import { AdapterRepository } from "@core/database/repositories/adapterRepository";
 import {
@@ -321,7 +321,9 @@ export class AdapterManager {
     if (
       adapter &&
       !adapter.isBuiltIn &&
-      adapter.pluginDir.startsWith(this.userPluginsDir)
+      relative(resolve(this.userPluginsDir), resolve(adapter.pluginDir)).length > 0 &&
+      !relative(resolve(this.userPluginsDir), resolve(adapter.pluginDir)).startsWith("..") &&
+      !isAbsolute(relative(resolve(this.userPluginsDir), resolve(adapter.pluginDir)))
     ) {
       rmSync(adapter.pluginDir, { recursive: true, force: true });
     }

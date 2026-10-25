@@ -30,11 +30,11 @@ export class WirelessReconnector {
   }
 
   async reconnectNow(): Promise<void> {
-    await this.tick(true);
+    await this.tick();
   }
 
-  private async tick(force = false): Promise<void> {
-    if (this.busy && !force) return;
+  private async tick(): Promise<void> {
+    if (this.busy) return;
     this.busy = true;
 
     try {
@@ -42,7 +42,7 @@ export class WirelessReconnector {
       if (saved.length === 0) return;
 
       const connected = new Set(
-        this.deviceMonitor.getLastDevices().map((d) => d.serial),
+        this.deviceMonitor.getLastDevices().filter((d) => d.status === "online").map((d) => d.serial),
       );
       const adb = this.createAdb();
       let reconnected = 0;
@@ -63,6 +63,8 @@ export class WirelessReconnector {
         );
         await this.deviceMonitor.refresh();
       }
+    } catch (error) {
+      this.eventBus.adb("warn", error instanceof Error ? error.message : "Wireless reconnection failed");
     } finally {
       this.busy = false;
     }

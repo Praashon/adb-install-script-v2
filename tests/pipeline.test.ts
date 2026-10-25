@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createServer, Server } from "http";
 import { AddressInfo } from "net";
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
@@ -411,4 +411,10 @@ describe("adapter sandbox", () => {
 
     expect(adapter.getTimeout()).toBe(120000);
   });
+});
+
+vi.mock("@security-engine/network", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../security-engine/network")>();
+  return { ...actual, safeFetch: (url: string, init?: RequestInit) =>
+    new URL(url).hostname === "127.0.0.1" ? fetch(url, init) : actual.safeFetch(url, init) };
 });

@@ -35,6 +35,7 @@ export class JobQueue {
     const device = deviceSerial
       ? this.deviceRepo.findBySerial(deviceSerial)
       : undefined;
+    if (deviceSerial && !device) throw new Error("Selected device is not known; refresh devices and retry");
     const preferred =
       device ??
       (type === "install" ? this.deviceRepo.findPreferred() : undefined);
@@ -58,12 +59,16 @@ export class JobQueue {
     });
     return jobId;
   }
-  getNext(excludeIds: Set<string> = new Set()): {
+  getNext(excludeIds: Set<string> = new Set(), busyDevices: Set<string> = new Set()): {
     jobId: string;
     context: JobContext;
   } | null {
     const queued = this.jobRepo.findByStatus("queued");
-    const job = queued.find((j) => !excludeIds.has(j.id));
+    const job = queued.find((candidate) => {
+      if (excludeIds.has(candidate.id)) return false;
+      const saved = this.jobRepo.readContext(candidate.id) ?? {};
+      return candidate.type !== "install" || !busyDevices.has(String(saved.deviceSerial ?? candidate.deviceId ?? "unselected"));
+    });
     if (!job) return null;
     const saved = this.jobRepo.readContext(job.id) ?? {};
     return {
@@ -80,6 +85,7 @@ export class JobQueue {
   async requeueFailed(jobId: string): Promise<void> {
     const job = this.jobRepo.findById(jobId);
     if (!job) throw new Error("Job not found");
+    if (!["failed", "cancelled"].includes(job.status)) throw new Error("Only failed or cancelled jobs may be retried");
     const steps = createJobSteps(job.type as JobType);
     const saved = this.jobRepo.readContext(jobId) ?? {};
     const downloadPath =
@@ -96,7 +102,7 @@ export class JobQueue {
       jobId,
       hasLocalFile
         ? { ...saved, jobId, url: job.url, deviceId: job.deviceId ?? undefined }
-        : { jobId, url: job.url, deviceId: job.deviceId ?? undefined },
+        : { jobId, url: job.url, deviceId: job.deviceId ?? undefined, deviceSerial: saved.deviceSerial },
     );
     this.eventBus.job(
       jobId,

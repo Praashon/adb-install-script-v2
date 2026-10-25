@@ -1,86 +1,59 @@
-# ADB APK Installer Pro - MAJOR UPDATE
+# ADB APK Installer Pro
 
-## Overview
-ADB APK Installer Pro is a premier desktop application designed for Windows. It empowers you to effortlessly manage, download, and install Android applications directly to your connected devices. By bridging your computer with online APK sources, the software facilitates rapid app installation through a robust ADB integration.
+A Windows Electron application for APK downloads, installation queues and authorized Android device management.
 
-## What's New in Version 2.0
-I am thrilled to announce a substantial leap forward in Android device management. Version 2.0 introduces a suite of powerful capabilities engineered to streamline your workflow and provide unprecedented control.
+Repository: [Praashon/adb-install-script-v2](https://github.com/Praashon/adb-install-script-v2). [Releases](https://github.com/Praashon/adb-install-script-v2/releases).
 
-* Integrated Screen Mirroring: Seamlessly view and control your device screen directly from your desktop using the newly integrated scrcpy engine.
-* Advanced Wireless Connectivity: Say goodbye to cables with the new Wireless Pairing Wizard for Android 11 and above. Your devices will now persistently auto-reconnect for a frictionless experience.
-* Pre-Install Permission Analyzer: Maintain absolute security by thoroughly reviewing requested APK permissions before initiating any installation.
-* Drag and Drop Bulk Installation: Drastically reduce setup time by dragging and dropping multiple APK files for simultaneous batch installation.
-* Pro Developer Tools: Dive deep into device diagnostics with a live Logcat console and real-time performance monitoring.
-* Instant Media Capture: Capture high-quality screenshots and record screen activity instantly with dedicated tools.
-* Uncompromised Stability: Enjoy a flawless experience with comprehensive fixes addressing stuck offline devices and download routing inaccuracies.
+## Development
 
-## Why Choose This Platform?
-The primary objective of this application is to completely eliminate the friction of Android app management. Rather than executing tedious manual operations, you can now track sources, process background downloads, and deploy advanced ADB commands from a single, elegantly designed dashboard. This translates to massive time savings for device configuration and testing environments.
+Use Node.js 20.19+ or a compatible later version, Git and Android platform-tools. Enable and authorize device debugging on Android. This checkout was tested with system Node 24 and an Electron-ABI native rebuild; see [testing](docs/TESTING.md) for the native-toolchain limitation.
 
-## Core Features
-* Automatic Device Detection: Instantly recognizes connected Android devices and active emulators upon launch.
-* Intelligent Downloads: Queue, monitor, and resume multiple parallel APK downloads with complete reliability.
-* Source Management: Curate a personal library by adding your preferred online APK repositories and links.
-* Isolated Safe Browsing: All external links are processed in an isolated environment to ensure maximum system security.
-* Elegant Interface: A meticulously crafted dashboard that prioritizes speed, clarity, and visual excellence.
+```powershell
+git clone https://github.com/Praashon/adb-install-script-v2.git
+cd adb-install-script-v2
+npm ci
+npm run dev
+```
 
-## Getting Started
+Postinstall rebuilds native dependencies for Electron and optionally fetches checksum-pinned scrcpy. Existing unverified scrcpy files are preserved and reported. ADB and optional Android SDK signing tools run locally; no mandatory cloud subscription is used.
 
-### Quick Install (Recommended)
-The easiest way to get started is to download the pre-compiled Windows executable.
-1. Visit the [Releases Page](https://github.com/Praashon/adb-install-script/releases)
-2. Download the latest `ADB APK Installer Pro-Setup.exe` file.
-3. Run the installer and follow the on-screen prompts.
+## Current capabilities
 
-### Build From Source
-If you prefer to compile the application yourself, follow these instructions.
+- Local/file and URL download/install queues with stored progress, logs, pause/cancel and reviewed recovery.
+- USB/wireless device cards, saved wireless profiles, installed packages and permissions.
+- APK/bundle extraction and offline review with SHA-256, metadata, ABI, permission warnings and optional signing verification.
+- Default-cancel installation preview naming device, version, compatibility and relevant options.
+- Debloat catalog with package/device-specific confirmation; Android user 0 removal and full uninstall are distinct operations.
+- scrcpy mirroring, screenshots/recording, logcat and basic performance metrics.
+- Declarative JSON source plugins and optional Chromium-assisted source discovery.
 
-#### Prerequisites
-1. Node.js (Version 20.0.0 or higher recommended)
-2. Git version control
-3. An Android device with USB Debugging enabled (or an active emulator)
-4. ADB installed and configured in your system PATH
+Permission analysis is not a malware verdict. Hashes alone do not establish publisher trust. Resume re-enters a pipeline step; downloads do not implement byte-range continuation and an interrupted ADB install cannot resume midway. Restoration of removed apps/data is not guaranteed.
 
-### Installation Guide
-Launch your preferred terminal and execute the following sequence:
+The extension requires its updated Native Messaging host and restrictive registration. Authenticated requests still require desktop approval and queue a download for review; install separately in the application.
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Praashon/adb-install-script.git
-   ```
+## Verify and package
 
-2. Navigate to the project directory:
-   ```bash
-   cd adb-install-script
-   ```
+```powershell
+npm run typecheck
+npm test
+npm run test:native
+npm run build
+npm run test:electron
+npm run package
+```
 
-3. Install dependencies:
-   ```bash
-   npm install
-   ```
+Read [TESTING.md](docs/TESTING.md) before native checks. Windows artifacts are unsigned unless a signing identity is configured. No publishing occurs automatically.
 
-4. Launch the development environment:
-   ```bash
-   npm run dev
-   ```
+## Audit and feature status
 
-5. (Optional) Compile for production use:
-   ```bash
-   npm run build
-   npm run package
-   ```
+This branch implements a security/reliability increment and partial APK Security Center improvements. It does not finish the entire major-feature mission. Remaining dependency/runtime advisories prevent release qualification.
 
-   
-## Usage Instructions
+- [Architecture](docs/audit/architecture.md)
+- [Security findings and release blockers](docs/audit/security-findings.md)
+- [Bugs and fixes](docs/audit/bugs-and-fixes.md)
+- [Performance](docs/audit/performance.md)
+- [REA evidence](docs/audit/rea-evidence.md)
+- [Feature status](docs/FEATURES.md)
+- [Mission checklist](docs/audit/checklist.md)
 
-1. Connect Your Device: Interface your Android device with your computer via USB or wireless debugging. Ensure USB Debugging is authorized. The dashboard will instantly register and display your device.
-2. Configure Sources: Navigate to the Sources module to input your trusted APK repository links.
-3. Initiate Downloads: Browse your configured sources and select an APK. The integrated download engine will seamlessly process the file transfer.
-4. Deploy via ADB: Upon download completion, engage the install action adjacent to the file. The application will autonomously push and install the APK to your selected device.
-
-## Technology Stack
-* Electron
-* React
-* TypeScript
-* Vite
-* Tailwind CSS
+Automated audit tests use fixtures and isolated profiles; they do not install/remove packages or change debugging settings on your real devices.

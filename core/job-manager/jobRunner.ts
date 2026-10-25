@@ -21,6 +21,8 @@ class JobAbortedError extends Error {
 interface RunningJob {
   controller: AbortController;
   kind: "cancelled" | "paused" | null;
+  deviceKey: string | null;
+  finished?: Promise<void>;
 }
 export class JobRunner {
   private jobRepo: JobRepository;
@@ -30,6 +32,7 @@ export class JobRunner {
   private stepExecutors = new Map<StepName, StepExecutor>();
   private maxConcurrent = 2;
   private draining = false;
+  private stopping = false;
   constructor(
     db: BetterSQLite3Database<typeof schema>,
     private eventBus: EventBus,
@@ -42,18 +45,20 @@ export class JobRunner {
     this.stepExecutors.set(name, executor);
   }
   processNext(): void {
-    if (this.draining) return;
+    if (this.draining || this.stopping) return;
     this.draining = true;
     try {
       while (this.running.size < this.maxConcurrent) {
-        const next = this.jobQueue.getNext(new Set(this.running.keys()));
+        const next = this.jobQueue.getNext(new Set(this.running.keys()),
+          new Set([...this.running.values()].map((entry) => entry.deviceKey).filter((key): key is string => key !== null)));
         if (!next) break;
         const entry: RunningJob = {
           controller: new AbortController(),
           kind: null,
+          deviceKey: this.jobRepo.findById(next.jobId)?.type === "install" ? String(next.context.deviceSerial ?? next.context.deviceId ?? "unselected") : null,
         };
         this.running.set(next.jobId, entry);
-        void this.executeJob(next.jobId, next.context, entry)
+        entry.finished = this.executeJob(next.jobId, next.context, entry)
           .catch((error) => {
             const message =
               error instanceof Error ? error.message : "Unknown error";
@@ -106,12 +111,7 @@ export class JobRunner {
         });
         const executor = this.stepExecutors.get(step.name);
         if (!executor) {
-          this.eventBus.job(
-            jobId,
-            "warn",
-            `No executor for step: ${step.name}, skipping`,
-          );
-          continue;
+          throw new Error(`No executor registered for required step: ${step.name}`);
         }
         const helpers: StepHelpers = {
           setStepProgress: (fraction) => {
@@ -143,6 +143,7 @@ export class JobRunner {
           helpers,
           entry,
         );
+        this.throwIfAborted(entry);
         this.jobRepo.saveContext(
           jobId,
           currentContext as unknown as Record<string, unknown>,
@@ -204,7 +205,7 @@ export class JobRunner {
         if (error instanceof JobAbortedError) throw error;
         const message =
           error instanceof Error ? error.message : "Unknown error";
-        if (error instanceof Error && error.name === "NonRetryableError") {
+        if (stepName === "install_apk" || stepName === "verify_installation" || (error instanceof Error && error.name === "NonRetryableError")) {
           this.retryManager.reset(retryKey);
           throw new Error(message);
         }
@@ -220,7 +221,7 @@ export class JobRunner {
           `${stepLabel} failed, retrying (${attempt}/${attempt + remaining}): ${message}`,
           { step: stepName, error: message, attempt },
         );
-        await this.retryManager.waitForRetry(retryKey);
+        await this.retryManager.waitForRetry(retryKey, entry.controller.signal);
         this.throwIfAborted(entry);
       }
     }
@@ -233,6 +234,7 @@ export class JobRunner {
     if (entry) {
       entry.kind = "cancelled";
       entry.controller.abort();
+      await entry.finished;
       return;
     }
     const job = this.jobRepo.findById(jobId);
@@ -246,6 +248,7 @@ export class JobRunner {
     if (entry) {
       entry.kind = "paused";
       entry.controller.abort();
+      await entry.finished;
       return;
     }
     const job = this.jobRepo.findById(jobId);
@@ -265,7 +268,8 @@ export class JobRunner {
     const recoverable = this.jobRepo.findRecoverable();
     for (const job of recoverable) {
       if (job.status === "running") {
-        this.jobRepo.updateStatus(job.id, "queued");
+        const uncertain = ["install_apk", "verify_installation"].includes(job.currentStep ?? "");
+        this.jobRepo.updateStatus(job.id, uncertain ? "paused" : "queued");
         this.eventBus.job(job.id, "info", "Job recovered after restart");
       }
     }
@@ -278,11 +282,17 @@ export class JobRunner {
     }
     this.processNext();
   }
+  async shutdown(): Promise<void> {
+    this.stopping = true;
+    const entries = [...this.running.values()];
+    for (const entry of entries) { entry.kind = "paused"; entry.controller.abort(); }
+    await Promise.all(entries.map((entry) => entry.finished));
+  }
   isRunning(jobId: string): boolean {
     return this.running.has(jobId);
   }
   setMaxConcurrent(max: number): void {
-    this.maxConcurrent = Math.max(1, Math.min(8, max));
+    this.maxConcurrent = Number.isFinite(max) ? Math.max(1, Math.min(8, Math.floor(max))) : 2;
     this.processNext();
   }
 }

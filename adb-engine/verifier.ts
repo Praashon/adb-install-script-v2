@@ -1,3 +1,4 @@
+import { assertPackageName, assertSerial } from "./arguments";
 import { execFile } from "child_process";
 import { promisify } from "util";
 const execFileAsync = promisify(execFile);
@@ -17,6 +18,8 @@ export class Verifier {
     packageName: string,
     serial?: string,
   ): Promise<VerificationResult> {
+    assertPackageName(packageName);
+    if (serial) assertSerial(serial);
     try {
       const args = serial
         ? ["-s", serial, "shell", "pm", "list", "packages", packageName]
@@ -53,6 +56,8 @@ export class Verifier {
     versionName?: string;
     versionCode?: number;
   }> {
+    assertPackageName(packageName);
+    if (serial) assertSerial(serial);
     try {
       const args = serial
         ? ["-s", serial, "shell", "dumpsys", "package", packageName]
@@ -73,6 +78,8 @@ export class Verifier {
     }
   }
   async launchApp(packageName: string, serial?: string): Promise<boolean> {
+    assertPackageName(packageName);
+    if (serial) assertSerial(serial);
     try {
       const args = serial
         ? [

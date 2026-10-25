@@ -28,7 +28,8 @@ export function extractManifestInfo(buffer: Buffer): ManifestInfo {
     permissions: [],
   };
 
-  if (buffer.length < 8) return info;
+  if (buffer.length < 8 || buffer.readUInt16LE(0) !== 3 || buffer.readUInt16LE(2) !== 8) return info;
+  if (buffer.readUInt32LE(4) !== buffer.length) throw new Error("Truncated Android manifest");
 
   let pool: StringPool | null = null;
   let offset = 8;
@@ -36,12 +37,12 @@ export function extractManifestInfo(buffer: Buffer): ManifestInfo {
   while (offset + 8 <= buffer.length) {
     const chunkType = buffer.readUInt16LE(offset);
     const chunkSize = buffer.readUInt32LE(offset + 4);
-    if (chunkSize < 8 || offset + chunkSize > buffer.length) break;
+    if (chunkSize < 8 || offset + chunkSize > buffer.length) throw new Error("Invalid manifest chunk size");
 
     if (chunkType === CHUNK_STRING_POOL) {
-      pool = parseStringPool(buffer, offset);
+      pool = parseStringPool(buffer.subarray(offset, offset + chunkSize), 0);
     } else if (chunkType === CHUNK_START_ELEMENT && pool) {
-      readElement(buffer, offset, pool, info);
+      readElement(buffer.subarray(offset, offset + chunkSize), 0, pool, info);
     }
 
     offset += chunkSize;
@@ -51,6 +52,7 @@ export function extractManifestInfo(buffer: Buffer): ManifestInfo {
 }
 
 function parseStringPool(buffer: Buffer, start: number): StringPool {
+  if (buffer.length - start < 28) throw new Error("Truncated manifest string pool");
   const stringCount = buffer.readUInt32LE(start + 8);
   const flags = buffer.readUInt32LE(start + 16);
   const stringsStart = buffer.readUInt32LE(start + 20);
@@ -59,6 +61,7 @@ function parseStringPool(buffer: Buffer, start: number): StringPool {
   const strings: string[] = [];
   const offsetsBase = start + 28;
   const dataBase = start + stringsStart;
+  if (stringCount > 100000 || offsetsBase + stringCount * 4 > buffer.length || dataBase > buffer.length || dataBase < offsetsBase + stringCount * 4) throw new Error("Invalid manifest string pool bounds");
 
   for (let i = 0; i < stringCount; i++) {
     const stringOffset = buffer.readUInt32LE(offsetsBase + i * 4);
@@ -113,6 +116,7 @@ function readElement(
   pool: StringPool,
   info: ManifestInfo,
 ): void {
+  if (buffer.length - chunkStart < 36) throw new Error("Truncated manifest element");
   const nameRef = buffer.readUInt32LE(chunkStart + 20);
   const elementName = pool.strings[nameRef] ?? "";
 
@@ -122,7 +126,7 @@ function readElement(
   const attrs = new Map<string, { stringValue: string; intValue: number }>();
   for (let i = 0; i < attributeCount; i++) {
     const base = attributesStart + i * 20;
-    if (base + 20 > buffer.length) break;
+    if (base + 20 > buffer.length) throw new Error("Truncated manifest attributes");
 
     const attrName = pool.strings[buffer.readUInt32LE(base + 4)] ?? "";
     const rawValueRef = buffer.readInt32LE(base + 8);
@@ -148,7 +152,7 @@ function readElement(
       attrs.get("versionName")?.stringValue || info.versionName;
     const vc = attrs.get("versionCode");
     if (vc) info.versionCode = vc.intValue;
-  } else if (elementName === "uses-permission") {
+  } else if ((elementName === "uses-permission" || elementName === "uses-permission-sdk-23")) {
     const name = attrs.get("name")?.stringValue;
     if (name && !info.permissions.includes(name)) info.permissions.push(name);
   } else if (elementName === "uses-sdk") {

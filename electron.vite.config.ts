@@ -5,6 +5,7 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
+      commonjsOptions: { include: [/node_modules/, /safe-archive\.cjs/] },
       lib: {
         entry: resolve("electron/main.ts"),
       },

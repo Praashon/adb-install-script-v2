@@ -1,3 +1,4 @@
+import { safeFetch } from "@security-engine/network";
 import { SandboxedAdapter } from "@security-engine/sandbox";
 import { EventBus } from "@core/event-bus/eventBus";
 export type DownloadStrategyType = "direct" | "html" | "browser" | "redirect";
@@ -40,7 +41,7 @@ export class DownloadResolver {
   }
   private async resolveDirectUrl(url: string): Promise<ResolvedDownload> {
     try {
-      const response = await fetch(url, { method: "HEAD", redirect: "follow" });
+      const response = await safeFetch(url, { method: "HEAD", redirect: "follow" });
       const contentType = response.headers.get("content-type") || "";
       const contentLength = response.headers.get("content-length");
       const disposition = response.headers.get("content-disposition") || "";

@@ -1,3 +1,4 @@
+import { validateEntries, writeEntry } from "../scripts/safe-archive.cjs";
 import AdmZip from "adm-zip";
 import { join } from "path";
 import { mkdirSync, statSync } from "fs";
@@ -34,13 +35,14 @@ export class Extractor {
   }
   private extractXapk(filePath: string, outputDir: string): ApkPackageInfo {
     const zip = new AdmZip(filePath);
-    const entries = zip.getEntries();
+    const entries = validateEntries(zip.getEntries(), outputDir);
     const apkFiles: string[] = [];
     const obbFiles: string[] = [];
     let manifestData: Record<string, unknown> | null = null;
     for (const entry of entries) {
       if (entry.isDirectory) continue;
       if (entry.entryName === "manifest.json") {
+        if (entry.header.size > 1024 * 1024) throw new Error("Bundle manifest exceeds limit");
         try {
           manifestData = JSON.parse(entry.getData().toString("utf-8"));
         } catch {}
@@ -48,7 +50,7 @@ export class Extractor {
       }
       if (entry.entryName.endsWith(".apk")) {
         const flatName = entry.entryName.split("/").pop()!;
-        zip.extractEntryTo(entry, outputDir, false, true);
+        writeEntry(outputDir, flatName, entry.getData());
         apkFiles.push(join(outputDir, flatName));
         continue;
       }
@@ -62,7 +64,7 @@ export class Extractor {
           entry.entryName.split("/").slice(0, -1).join("/"),
         );
         mkdirSync(dir, { recursive: true });
-        zip.extractEntryTo(entry, outputDir, true, true);
+        writeEntry(outputDir, entry.entryName, entry.getData());
         obbFiles.push(outPath);
         continue;
       }
@@ -81,12 +83,12 @@ export class Extractor {
   }
   private extractApks(filePath: string, outputDir: string): ApkPackageInfo {
     const zip = new AdmZip(filePath);
-    const entries = zip.getEntries();
+    const entries = validateEntries(zip.getEntries(), outputDir);
     const apkFiles: string[] = [];
     for (const entry of entries) {
       if (entry.isDirectory) continue;
       if (!entry.entryName.endsWith(".apk")) continue;
-      zip.extractEntryTo(entry, outputDir, false, true);
+      writeEntry(outputDir, entry.entryName.split("/").pop()!, entry.getData());
       apkFiles.push(join(outputDir, entry.entryName.split("/").pop()!));
     }
     this.sortApkFiles(apkFiles);

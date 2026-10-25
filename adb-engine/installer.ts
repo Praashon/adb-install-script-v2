@@ -1,3 +1,5 @@
+import { assertPackageName, validateAdbArguments } from "./arguments";
+import { resolve } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { basename } from "path";
@@ -32,7 +34,7 @@ export class Installer {
     const args = this.buildArgs(options, [
       "install",
       ...this.installFlags(options),
-      apkPath,
+      resolve(apkPath),
     ]);
     this.eventBus.adb("info", `Installing ${basename(apkPath)}`, {
       serial: options.serial,
@@ -58,7 +60,7 @@ export class Installer {
     const args = this.buildArgs(options, [
       "install-multiple",
       ...this.installFlags(options),
-      ...apkPaths,
+      ...apkPaths.map((path) => resolve(path)),
     ]);
     this.eventBus.adb(
       "info",
@@ -74,6 +76,7 @@ export class Installer {
     packageName: string,
     options: InstallOptions = {},
   ): Promise<boolean> {
+    assertPackageName(packageName);
     const remoteDir = `/sdcard/Android/obb/${packageName}`;
     this.eventBus.adb("info", `Pushing OBB to ${remoteDir}`, {
       serial: options.serial,
@@ -117,7 +120,7 @@ export class Installer {
       });
       const output = `${stdout}${stderr}`;
       const duration = Date.now() - startTime;
-      if (!/success/i.test(output)) {
+      if (!/^Success\s*$/im.test(output)) {
         const error = this.parseInstallError(output);
         this.eventBus.adb("error", `Installation failed: ${error}`, { output });
         return { success: false, error, output, duration };
@@ -152,7 +155,9 @@ export class Installer {
     return flags;
   }
   private buildArgs(options: InstallOptions, args: string[]): string[] {
-    return options.serial ? ["-s", options.serial, ...args] : args;
+    const result = options.serial ? ["-s", options.serial, ...args] : args;
+    validateAdbArguments(result);
+    return result;
   }
   private parseInstallError(output: string): string {
     const errorMap: Record<string, string> = {
@@ -179,7 +184,7 @@ export class Installer {
       INSTALL_FAILED_MISSING_SPLIT:
         "Missing split APKs, install the full bundle instead.",
       INSTALL_FAILED_VERIFICATION_FAILURE:
-        'Play Protect blocked the install. Disable "Verify apps over USB" on the device.',
+        'Android package verification blocked the install. Review the package source and device warning before proceeding.',
     };
     for (const [code, message] of Object.entries(errorMap)) {
       if (output.includes(code)) return message;
